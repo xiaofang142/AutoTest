@@ -52,3 +52,23 @@ async def parse_documents(project_id: str, body: dict | None = None):
             "documents": [d.model_dump(mode="json") for d in parsed],
         },
     }
+
+@router.get("/projects/{project_id}/documents/parse/status")
+async def get_parse_status(project_id: str):
+    from app.services.document_service import DocumentService
+    from app.dependencies import get_document_service
+    service = get_document_service()
+    docs = await service.get_project_documents(project_id)
+    total = len(docs)
+    completed = sum(1 for d in docs if d.status == "completed")
+    failed = sum(1 for d in docs if d.status == "failed")
+    return {
+        "code": 0,
+        "data": {
+            "overall_status": "completed" if completed == total else "parsing",
+            "total": total,
+            "completed": completed,
+            "failed": failed,
+            "documents": [{"id": d.id, "status": d.status, "url": d.url} for d in docs],
+        },
+    }

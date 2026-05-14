@@ -22,3 +22,8 @@ async def export_report(run_id: str, format: str = "json"):
     service = _get_service()
     report = await service.get_run_report(run_id, "full")
     return {"code": 0, "data": report}
+
+@router.get("/runs/{run_id}/report/export")
+async def export_report(run_id: str, format: str = "json"):
+    report = await _get_service().get_run_report(run_id, "full")
+    return {"code": 0, "data": report}

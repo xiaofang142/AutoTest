@@ -1,6 +1,8 @@
 import axios from "axios";
 
-const api = axios.create({ baseURL: "/api/v1" });
+// API base URL: use Vite proxy (default), or direct URL via env var
+const BASE = import.meta.env.VITE_API_URL || "/api/v1";
+const api = axios.create({ baseURL: BASE });
 
 export const projectApi = {
   list: (status?: string) => api.get("/projects", { params: { status } }),
@@ -13,21 +15,18 @@ export const projectApi = {
 export const documentApi = {
   list: (pid: string) => api.get(`/projects/${pid}/documents`),
   add: (pid: string, data: any) => api.post(`/projects/${pid}/documents`, data),
-  parse: (pid: string, docIds?: string[]) =>
-    api.post(`/projects/${pid}/documents/parse`, { document_ids: docIds }),
+  parse: (pid: string) => api.post(`/projects/${pid}/documents/parse`),
 };
 
 export const knowledgeApi = {
   get: (pid: string) => api.get(`/projects/${pid}/knowledge`),
-  getRules: (pid: string, category?: string) =>
-    api.get(`/projects/${pid}/knowledge/rules`, { params: { category } }),
+  getRules: (pid: string, cat?: string) => api.get(`/projects/${pid}/knowledge/rules`, { params: { category: cat } }),
 };
 
 export const scenarioApi = {
   list: (pid: string) => api.get(`/projects/${pid}/scenarios`),
   get: (id: string) => api.get(`/scenarios/${id}`),
-  generate: (pid: string, platforms?: string[]) =>
-    api.post(`/projects/${pid}/scenarios/generate`, { platforms }),
+  generate: (pid: string, plats?: string[]) => api.post(`/projects/${pid}/scenarios/generate`, { platforms: plats }),
 };
 
 export const runApi = {
@@ -35,19 +34,15 @@ export const runApi = {
   create: (pid: string, data: any) => api.post(`/projects/${pid}/runs`, data),
   progress: (id: string) => api.get(`/runs/${id}/progress`),
   cancel: (id: string) => api.post(`/runs/${id}/cancel`),
-  retry: (id: string, caseIds?: string[]) =>
-    api.post(`/runs/${id}/retry`, { case_ids: caseIds }),
+  retry: (id: string, cids?: string[]) => api.post(`/runs/${id}/retry`, { case_ids: cids }),
 };
 
 export const reportApi = {
-  get: (id: string, format?: string) =>
-    api.get(`/runs/${id}/report`, { params: { format } }),
+  get: (id: string, fmt?: string) => api.get(`/runs/${id}/report`, { params: { format: fmt } }),
 };
 
 export const defectApi = {
-  list: (rid: string, severity?: string) =>
-    api.get(`/runs/${rid}/defects`, { params: { severity } }),
+  list: (rid: string, sev?: string) => api.get(`/runs/${rid}/defects`, { params: { severity: sev } }),
   get: (id: string) => api.get(`/defects/${id}`),
-  getEvidence: (id: string, format?: string) =>
-    api.get(`/defects/${id}/evidence`, { params: { format } }),
+  getEvidence: (id: string) => api.get(`/defects/${id}/evidence`),
 };

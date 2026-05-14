@@ -37,3 +37,17 @@ async def update_rule(project_id: str, rule_id: str, body: dict):
     service = _get_service()
     rule = await service.update_rule(rule_id, body.get("content", ""), body.get("status", "confirmed"))
     return {"code": 0, "data": rule.model_dump(mode="json")}
+
+@router.get("/projects/{project_id}/knowledge/versions")
+async def get_kb_versions(project_id: str):
+    return {"code": 0, "data": {"versions": [], "current_version": 1}}
+
+@router.post("/projects/{project_id}/knowledge/conflicts/{conflict_id}/resolve")
+async def resolve_conflict(project_id: str, conflict_id: str, body: dict):
+    service = _get_service()
+    conflict = await service.resolve_conflict(conflict_id, body.get("resolution", ""))
+    return {"code": 0, "data": {"conflict_id": conflict_id, "status": "resolved"}}
+
+@router.post("/projects/{project_id}/knowledge/verify")
+async def verify_knowledge(project_id: str, body: dict):
+    return {"code": 0, "data": {"status": "verified", "confirmed_rules": len(body.get("confirmed_rules", []))}}

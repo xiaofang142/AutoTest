@@ -68,3 +68,8 @@ class RunService:
 
     async def save_step(self, step: StepExecutionRecord) -> StepExecutionRecord:
         return await self._repo.save_step(step)
+
+    async def get_run_history(self, project_id: str) -> list[dict]:
+        runs = await self._repo.get_by_project(project_id)
+        return [{"id": r.id, "status": r.status, "total_cases": r.total_cases,
+                 "created_at": str(r.created_at)} for r in runs]

@@ -63,3 +63,12 @@ async def retry_run(run_id: str, body: dict | None = None):
         return {"code": 0, "data": new_run.model_dump(mode="json")}
     except RunNotFoundError as e:
         raise HTTPException(404, str(e))
+
+@router.get("/projects/{project_id}/runs")
+async def get_run_history(project_id: str):
+    service = _get_service()
+    from app.dependencies import get_run_service
+    s = get_run_service()
+    from app.interfaces.repositories.run_repo import RunRepository
+    runs = await s.get_run_history(project_id)
+    return {"code": 0, "data": {"items": runs, "total": len(runs)}}
