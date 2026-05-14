@@ -1,4 +1,3 @@
-"""FastAPI dependency injection with auto-init using in-memory repos."""
 from app.services.project_service import ProjectService
 from app.services.document_service import DocumentService
 from app.services.knowledge_service import KnowledgeService
@@ -29,11 +28,10 @@ class _MemProjectRepo(ProjectRepository):
     async def get_by_id(self, i): return self._s.get(i)
     async def update(self, p): self._s[p.id] = p; return p
     async def delete(self, i): self._s.pop(i, None)
-    async def list_projects(self, status=None):
+    async def list_projects(self, st=None):
         r = list(self._s.values())
-        if status: r = [p for p in r if p.status == status]
+        if st: r = [p for p in r if p.status == st]
         return r
-
 
 class _MemDocRepo(DocumentRepository):
     def __init__(self): self._s = {}
@@ -44,7 +42,6 @@ class _MemDocRepo(DocumentRepository):
     async def delete(self, i): self._s.pop(i, None)
     async def save_raw(self, r): return r
     async def get_raw(self, _): return None
-
 
 class _MemKBRepo(KnowledgeBaseRepository):
     def __init__(self): self._k = {}; self._r = {}; self._c = {}
@@ -64,7 +61,6 @@ class _MemKBRepo(KnowledgeBaseRepository):
     async def get_conflicts(self, _): return list(self._c.values())
     async def resolve_conflict(self, c): self._c[c.id] = c; return c
 
-
 class _MemScenarioRepo(ScenarioRepository):
     def __init__(self): self._s = {}; self._c = {}
     async def create_scenario(self, s): self._s[s.id] = s; return s
@@ -73,7 +69,6 @@ class _MemScenarioRepo(ScenarioRepository):
     async def update_scenario(self, s): self._s[s.id] = s; return s
     async def create_case(self, c): self._c[c.id] = c; return c
     async def get_case(self, i): return self._c.get(i)
-
 
 class _MemRunRepo(RunRepository):
     def __init__(self): self._r = {}; self._t = {}
@@ -87,7 +82,6 @@ class _MemRunRepo(RunRepository):
     async def save_step(self, s): self._t[s.id] = s; return s
     async def get_steps(self, i): return [s for s in self._t.values() if s.run_id == i]
 
-
 class _MemDefectRepo(DefectRepository):
     def __init__(self): self._s = {}
     async def create(self, d): self._s[d.id] = d; return d
@@ -97,6 +91,11 @@ class _MemDefectRepo(DefectRepository):
         if s: r = [d for d in r if d.severity == s]
         return r
     async def update(self, d): self._s[d.id] = d; return d
+
+
+def _create_ai():
+    from app.infrastructure.ai.lite_llm_service import LiteLLMAIService
+    return LiteLLMAIService()
 
 
 def init_services(project_repo=None, document_repo=None, kb_repo=None,
@@ -117,32 +116,22 @@ def init_services(project_repo=None, document_repo=None, kb_repo=None,
     _scenario_service = ScenarioService(sr)
     _run_service = RunService(rr, sr)
     _report_service = ReportService(rr, dfr)
-    _analyzer = CrossDimensionAnalyzer(dfr)
+    _analyzer = CrossDimensionAnalyzer(dfr, ai_service=_create_ai())
     _initialized = True
 
 
 def _ensure():
-    if not _initialized:
-        init_services()
+    if not _initialized: init_services()
 
-
-def get_project_service():
-    _ensure(); return _project_service
-
-def get_document_service():
-    _ensure(); return _document_service
-
-def get_knowledge_service():
-    _ensure(); return _knowledge_service
-
-def get_scenario_service():
-    _ensure(); return _scenario_service
-
-def get_run_service():
-    _ensure(); return _run_service
-
-def get_report_service():
-    _ensure(); return _report_service
-
+def get_project_service(): _ensure(); return _project_service
+def get_document_service(): _ensure(); return _document_service
+def get_knowledge_service(): _ensure(); return _knowledge_service
+def get_scenario_service(): _ensure(); return _scenario_service
+def get_run_service(): _ensure(); return _run_service
+def get_report_service(): _ensure(); return _report_service
 def get_analyzer():
-    _ensure(); return _analyzer
+    _ensure()
+    from app.infrastructure.ai.lite_llm_service import LiteLLMAIService
+    if _analyzer._ai is None:
+        _analyzer._ai = LiteLLMAIService()
+    return _analyzer
