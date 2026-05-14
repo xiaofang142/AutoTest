@@ -5,6 +5,7 @@ from app.config import settings
 from app.lib.logger import setup_logging
 from app.api.v1 import projects, documents, knowledge, scenarios, runs, reports, defects
 from app.api.websocket import run_progress as ws_progress
+from app.api.v1 import settings as settings_router
 
 
 @asynccontextmanager
@@ -36,6 +37,7 @@ app.include_router(scenarios.router, prefix="/api/v1")
 app.include_router(runs.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(defects.router, prefix="/api/v1")
+app.include_router(settings_router.router, prefix="/api/v1")
 
 # WebSocket for real-time progress
 app.include_router(ws_progress.router)

@@ -103,3 +103,21 @@ class ScenarioService:
         for k, v in updates.items():
             if hasattr(s, k): setattr(s, k, v)
         return await self._repo.update_scenario(s)
+
+    async def generate_with_chain(self, project_id: str, rules: list,
+                                    platforms: list[str] | None = None) -> list[TestScenario]:
+        """Generate scenarios using ChainBuilder for multi-role business chains."""
+        from app.engine.chain_builder import ChainBuilder
+        builder = ChainBuilder(self._ai)
+        chains = await builder.build_chains(rules)
+        scenarios = builder.generate_test_chains(chains)
+
+        for s in scenarios:
+            s.project_id = project_id
+            s.platforms = platforms or ["web"]
+            try:
+                await self._repo.create_scenario(s)
+            except Exception as e:
+                logger.error(f"Save scenario failed: {e}")
+        logger.info(f"ChainBuilder: {len(scenarios)} scenarios from {len(chains)} chains")
+        return scenarios
