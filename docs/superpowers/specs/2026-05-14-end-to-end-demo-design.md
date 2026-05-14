@@ -136,15 +136,20 @@ for each 场景(role, flow, type):
        Business: URL/标题/预期文案
     9. 记录 StepExecutionRecord
 
-步骤状态:
-  passed: 全通过
-  uncertain: 仅 warning
-  failed: error 出现
+步骤状态 (status 取值: "passed" / "uncertain" / "failed"):
+  passed:    所有维度校验通过
+  uncertain: 有 warning 但无 error (不阻断, 最终报告标记)
+  failed:    error 级别问题出现 (根据 continueOnFailure 决定是否终止)
 
-异常场景规则:
-  type=abnormal → 预期失败
-    预期失败且实际失败 → ✅
-    预期失败但实际成功 → ❌ 缺陷
+异常场景规则 (场景 type=abnormal 时):
+  expected_status="failure" (自动设置)
+  判定反转:
+    实际失败 → 步骤 status="passed"       (预期行为)
+    实际通过 → 步骤 status="failed"        (未按预期失败 → 缺陷)
+
+模型变更:
+  StepExecutionRecord.status: 新增 "uncertain" 取值
+  TestScenario: 新增 expected_status: str = "success" 字段
 ```
 
 ---
@@ -171,13 +176,22 @@ collect_all_anomalies(scenario_steps):
 ### 5.2 AI 分析 fallback
 
 ```
+AIService 新增接口:
+  analyze_cross_step_anomalies(anomalies: list[dict]) -> list[CausalGroup]:
+    输入: 所有步骤的全量异常事件 (含时间戳)
+    输出: 因果分组列表, 每组包含关联的事件链
+    用途: 跨步骤的批量因果发现, 替代逐对 judge_causal_relation
+
 if AI available:
-  analyze(defect) → root_cause + fix_suggestion
+  chains = await ai.analyze_cross_step_anomalies(all_anomalies)
+  for each chain:
+    root_cause = await ai.analyze_root_cause(chain)
+    fix = await ai.generate_fix_suggestion(chain + root_cause)
 else:
-  规则引擎:
-    严重度 = 维度数+类型权重
-    标题 = "维度X异常"
-    修复建议 = "请检查{触发维度}代码"
+  规则引擎 (仅单步内):
+    严重度 = 维度数 + 类型权重
+    标题 = "维度X异常: {首个异常说明}"
+    修复建议 = "请检查 {触发维度} 相关代码"
 ```
 
 ---
@@ -250,21 +264,45 @@ else:
 
 ## 7. 实现计划
 
-### Phase 1: 页面发现器
-- 新建: `app/infrastructure/executor/page_discovery.py`
-- 新建: `app/domain/models/discovery.py`
+### Phase 1: 页面发现器 (Executor TypeScript 端 + Python 端)
+
+**TypeScript 端 (executor/web/src/)**:
+- 新增: `discovery/page-explorer.ts` — DOM 结构提取
+  - 提取导航、表单、表格、按钮、输入框等交互元素
+  - 按语义区域分组 (header/nav/main/sidebar/footer)
+  - 生成 `selector_hint` (CSS 选择器)
+  - 上限: 50 交互元素, 80 文本元素, 3 层导航
+- 新增端点: `POST /agent/discover` → `PageDiscoveryResult`
+  - 返回: 页面标题、URL、元素清单(含类型/文本/选择器/可见性)、截图、区域分组
+- 匹配策略: 基于关键词 + 属性的结构化匹配 (非 AI)
+
+**Python 端**:
+- 新建: `app/domain/models/discovery.py` — PageDiscoveryResult 模型
+- 新建: `app/infrastructure/executor/page_discovery.py` — 通过 HTTP 调用 executor 的 /agent/discover
 
 ### Phase 2: 对照验证
-- 新建: `app/services/contrast_service.py`
+- 新建: `app/services/contrast_service.py` — 文档-页面对照
+  - 匹配策略: 关键词包含匹配 (文档术语 vs 页面元素文本)
+  - ⚠️ 文档有页面无 → 缺失项
+  - ⚡ 页面有文档无 → 多余项
+  - ❌ 文本不一致 → 冲突项
 - 修改: `app/engine/chain_builder.py` — 页面元素集成
+  - 步骤 target 使用页面发现的实际元素文本
 
-### Phase 3: CLI 命令
-- 新建: `scripts/demo.py` — 全流程编排
+### Phase 3: CLI 命令 — demo 全流程编排
+- 新建: `scripts/demo.py`
+- 内部项目生命周期:
+  - 自动创建临时项目 (`_demo_YYYYMMDD_xxx`)
+  - 如果提供了 `--doc`: 走完整文档解析管道
+  - 如果未提供 `--doc`: 仅页面发现 + 通用场景生成
+  - 执行完毕后可选保留 (`--keep-project`) 或清理
 - 集成: 文档解析 + 页面发现 + 场景生成 + 执行 + 校验 + 分析 + 输出
+- 参数: `--no-screenshots` 排除截图数据 (减小输出体积)
 
 ### Phase 4: 报告 + MCP
 - 新建: `app/services/demo_report_service.py`
-- 修改: `app/api/mcp/server.py` — 添加 demo 工具
+- 修改: `app/api/mcp/server.py` — 添加 `get_demo_report()` 工具
+- 截图处理: JSON 输出默认排除 base64 截图, 通过 `--include-screenshots` 或 MCP `format=full` 时包含
 
 ---
 
