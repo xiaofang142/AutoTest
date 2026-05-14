@@ -116,7 +116,7 @@ def init_services(project_repo=None, document_repo=None, kb_repo=None,
     dfr = defect_repo or _MemDefectRepo()
 
     _project_service = ProjectService(pr)
-    _document_service = DocumentService(dr)
+    _document_service = DocumentService(dr, kb_repo=kr, ai_service=_create_ai())
     _knowledge_service = KnowledgeService(kr)
     _scenario_service = ScenarioService(sr, kb_repo=kr, ai_service=_create_ai())
     _run_service = RunService(rr, sr)
