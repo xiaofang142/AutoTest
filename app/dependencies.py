@@ -140,3 +140,7 @@ def get_analyzer():
     if _analyzer._ai is None:
         _analyzer._ai = LiteLLMAIService()
     return _analyzer
+
+def get_defect_repo():
+    _ensure()
+    return _analyzer._defect_repo
