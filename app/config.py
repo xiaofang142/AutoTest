@@ -1,7 +1,12 @@
 from pydantic_settings import BaseSettings
 
 
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env")
+
     database_url: str = "postgresql+asyncpg://autotest:autotest@localhost:5432/autotest"
     redis_url: str = "redis://localhost:6379/0"
     litellm_api_key: str = ""
@@ -18,9 +23,6 @@ class Settings(BaseSettings):
     executor_android_url: str = "http://localhost:3101"
     executor_ios_url: str = "http://localhost:3102"
     log_level: str = "INFO"
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()
