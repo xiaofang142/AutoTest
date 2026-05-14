@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.lib.logger import setup_logging
 from app.api.v1 import projects, documents, knowledge, scenarios, runs, reports, defects
-from app.api.websocket import run_progress
+from app.api.websocket import run_progress as ws_progress
 
 
 @asynccontextmanager
@@ -28,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
+# REST API routes
 app.include_router(projects.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
 app.include_router(knowledge.router, prefix="/api/v1")
@@ -36,6 +36,9 @@ app.include_router(scenarios.router, prefix="/api/v1")
 app.include_router(runs.router, prefix="/api/v1")
 app.include_router(reports.router, prefix="/api/v1")
 app.include_router(defects.router, prefix="/api/v1")
+
+# WebSocket for real-time progress
+app.include_router(ws_progress.router)
 
 
 @app.get("/health")
