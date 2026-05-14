@@ -36,7 +36,7 @@ app.post("/agent/navigate", async (req, res) => {
       res.status(400).json({ success: false, message: "URL required" });
       return;
     }
-    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    await page.goto(url, { waitUntil: "load", timeout: 45000 });
     res.json({
       success: true,
       screenshot: await smartScreenshot(false),

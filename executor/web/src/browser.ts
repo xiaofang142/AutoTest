@@ -21,10 +21,19 @@ export async function ensureBrowser(
     context = await browser.newContext({
       viewport: viewport || { width: 1920, height: 1080 },
     });
-    page = await context.newPage();
-    cdpSession = await context.newCDPSession(page);
-    agent = new PageAgent(page as any);
+    const p = await context.newPage();
+    page = p;
+    cdpSession = await context.newCDPSession(p);
+    agent = new PageAgent(p as any);
     console.log("[Browser] Chromium + CDP + Midscene ready");
+  }
+  // Recreate page if it was closed (e.g., by cross-origin nav or crash)
+  if (page && page.isClosed()) {
+    console.log("[Browser] Page was closed, creating new page");
+    const p = await context!.newPage();
+    page = p;
+    cdpSession = await context!.newCDPSession(p);
+    agent = new PageAgent(p as any);
   }
   return { browser: browser!, context: context!, page: page!, cdpSession: cdpSession!, agent: agent! };
 }

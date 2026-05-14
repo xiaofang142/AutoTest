@@ -36,7 +36,7 @@ class WebExecutorClient(ExecutorClient):
     async def navigate(self, url: str, viewport: dict | None = None) -> NavigateResult:
         resp = await self._client.post(f"{self.base_url}/agent/navigate", json={
             "url": url,
-        }, timeout=30)
+        }, timeout=120)
         data = resp.json()
         return NavigateResult(
             success=data.get("success", False),

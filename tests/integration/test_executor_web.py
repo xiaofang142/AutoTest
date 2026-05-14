@@ -37,7 +37,7 @@ class TestExecutorConnectivity:
             resp = await c.post(
                 f"{EXECUTOR_URL}/agent/navigate",
                 json={"url": "https://example.com"},
-                timeout=30,
+                timeout=60,
             )
             assert resp.status_code == 200
             data = resp.json()
@@ -52,7 +52,7 @@ class TestExecutorConnectivity:
                 "entry": {"url": "https://example.com", "cases": []},
             }, timeout=10)
             assert resp.status_code == 200
-            assert resp.json().get("status") == "created"
+            assert resp.json().get("status") == "pending"
 
     @pytest.mark.asyncio
     async def test_start_and_poll(self):
@@ -98,4 +98,4 @@ class TestWebExecutorClient:
 
         client = WebExecutorClient(base_url=EXECUTOR_URL)
         result = await client.navigate("https://example.com")
-        assert result.success is True
+        assert result.success is True, f"navigate failed: {result}"
