@@ -1,178 +1,263 @@
+import http from "http";
 import express from "express";
 import cors from "cors";
-import { chromium, Browser, BrowserContext, Page, CDPSession } from "playwright";
-import { PageAgent } from "@midscene/web";
+import { ensureBrowser, getPage, closeBrowser, pageState, smartScreenshot } from "./browser.js";
+import { Capturer } from "./capturer.js";
+import { Reporter } from "./reporter.js";
+import { RunManager } from "./run-manager.js";
+import { executeStep } from "./step-executor.js";
+import type { RunEntry } from "./types.js";
 
+// ---------------------------------------------------------------------------
+// App setup
+// ---------------------------------------------------------------------------
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 
-let browser: Browser | null = null;
-let context: BrowserContext | null = null;
-let page: Page | null = null;
-let cdp: CDPSession | null = null;
-let agent: PageAgent | null = null;
-const capturedLogs: any[] = [];
-const capturedNetwork: any[] = [];
+const server = http.createServer(app);
 
-async function ensureBrowser() {
-  if (!browser) {
-    browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
-    context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
-    page = await context.newPage();
+// ---------------------------------------------------------------------------
+// Services & shared capturer for legacy /agent/* endpoints
+// ---------------------------------------------------------------------------
+const capturer = new Capturer();
+const reporter = new Reporter(server);
+const runManager = new RunManager(capturer, reporter);
 
-    // CDP for structured network capture (instead of route interception)
-    cdp = await context.newCDPSession(page);
-    await cdp.send("Network.enable");
-    cdp.on("Network.responseReceived", (params: any) => {
-      capturedNetwork.push({
-        type: "response",
-        method: params.response?.requestMethod || "GET",
-        url: params.response?.url || "",
-        status: params.response?.status || 0,
-        mime: params.response?.mimeType || "",
-        timing: params.response?.timing || null,
-        timestamp: Date.now(),
-      });
-    });
-    cdp.on("Network.requestWillBeSent", (params: any) => {
-      capturedNetwork.push({
-        type: "request",
-        method: params.request?.method || "GET",
-        url: params.request?.url || "",
-        headers: params.request?.headers || {},
-        timestamp: Date.now(),
-      });
-    });
-
-    // Console with level filtering and cap
-    page.on("console", (msg) => {
-      if (capturedLogs.length < 200) {
-        capturedLogs.push({
-          level: msg.type(), message: msg.text(),
-          location: msg.location()?.url || "",
-          timestamp: Date.now(),
-        });
-      }
-    });
-
-    agent = new PageAgent(page as any);
-    console.log("[Executor] CDP + Midscene ready");
-  }
-}
-
-async function pageState() {
-  if (!page) return { url: "", visibleTexts: [], alerts: [], perf: {} };
-  const perf = await page.evaluate(() => {
-    try {
-      const entries = performance.getEntriesByType("resource");
-      return entries.slice(-30).map((e: any) => ({
-        name: e.name?.split("?"[0]).slice(0, 100),
-        duration: Math.round(e.duration),
-        type: e.initiatorType,
-      }));
-    } catch { return []; }
-  });
-  return {
-    url: page.url(),
-    visibleTexts: await page.evaluate(() =>
-      Array.from(document.querySelectorAll("h1,h2,h3,p,button,span,a,label,li"))
-        .map(e => (e as HTMLElement).innerText?.trim()).filter(Boolean).slice(0, 80)),
-    alerts: await page.evaluate(() =>
-      Array.from(document.querySelectorAll("[class*='error'],[class*='alert'],[role='alert']"))
-        .map(e => (e as HTMLElement).innerText?.trim()).filter(Boolean)),
-    perf,
-  };
-}
-
-async function smartScreenshot(full: boolean = false): Promise<string> {
-  if (!page) return "";
-  const buf = await page.screenshot({ fullPage: full, type: "png" });
-  return `data:image/png;base64,${buf.toString("base64")}`;
-}
+// ---------------------------------------------------------------------------
+// Legacy /agent/* endpoints (backward compatible)
+// ---------------------------------------------------------------------------
 
 app.post("/agent/navigate", async (req, res) => {
   try {
-    await ensureBrowser();
+    const { page } = await ensureBrowser();
     const { url } = req.body;
-    if (!url) return res.status(400).json({ success: false, message: "URL required" });
-    await page!.goto(url, { waitUntil: "networkidle", timeout: 30000 });
-    res.json({ success: true, screenshot: await smartScreenshot(false), url: page!.url() });
-  } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+    if (!url) {
+      res.status(400).json({ success: false, message: "URL required" });
+      return;
+    }
+    await page.goto(url, { waitUntil: "networkidle", timeout: 30000 });
+    res.json({
+      success: true,
+      screenshot: await smartScreenshot(false),
+      url: page.url(),
+    });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
 app.post("/agent/execute", async (req, res) => {
   try {
     await ensureBrowser();
     const { action, target, value } = req.body;
-    const stepStart = Date.now();
-    capturedLogs.length = 0;
-    capturedNetwork.length = 0;
 
-    // Smart screenshot: viewport-only before (faster)
+    // Clear capturer buffers for this execution
+    capturer.clear();
+
+    // Build a synthetic step for the step-executor
+    const step = {
+      name: `${action} ${target || ""}`,
+      action: action || "click",
+      target: target || "",
+      value: value || undefined,
+    };
+
     const before = await smartScreenshot(false);
-    let ok = false, errMsg = "";
+    let ok = false;
+    let errMsg = "";
+    let levelUsed = -1;
 
+    // Level 0: Midscene AI
     try {
-      let inst = `${action} ${target}`;
-      if (value) inst += ` with value "${value}"`;
-      await agent!.ai(inst);
-      await page!.waitForTimeout(800);
+      const agent = (await ensureBrowser()).agent;
+      const instruction = `${step.action} ${step.target}`;
+      await agent.ai(value ? `${instruction} with value "${value}"` : instruction);
+      const page = getPage()!;
+      await page.waitForTimeout(800);
       ok = true;
+      levelUsed = 0;
     } catch (e: any) {
       errMsg = e.message;
+
+      // Level 1 fallback: DOM evaluation
       try {
-        const found = await page!.evaluate((t: string) => {
-          for (const el of Array.from(document.querySelectorAll("button,a,input,span,[role='button'],[role='link']"))) {
-            const h = el as HTMLElement;
-            if (h.innerText?.includes(t) || (el as HTMLInputElement).placeholder?.includes(t)) { h.click(); return true; }
+        const page = getPage()!;
+        const found = await page.evaluate(
+          ({ t, sel }: { t: string; sel: string[] }) => {
+            for (const el of Array.from(document.querySelectorAll(sel.join(",")))) {
+              const h = el as HTMLElement;
+              if (
+                h.innerText?.includes(t) ||
+                (el as HTMLInputElement).placeholder?.includes(t)
+              ) {
+                h.click();
+                return true;
+              }
+            }
+            return false;
+          },
+          {
+            t: target || "",
+            sel: ["button", "a", "input", "span", "[role='button']", "[role='link']"],
           }
-          return false;
-        }, target);
-        if (found) { ok = true; await page!.waitForTimeout(500); }
-      } catch {}
+        );
+        if (found) {
+          ok = true;
+          levelUsed = 1;
+          await page.waitForTimeout(500);
+        }
+      } catch {
+        // fall through
+      }
     }
 
-    // Smart screenshot: only full-page if action changed the page
     const after = ok ? await smartScreenshot(false) : await smartScreenshot(true);
     const state = await pageState();
-    const errors = capturedLogs.filter(l => l.level === "error" || l.level === "exception");
-    const warnings = capturedLogs.filter(l => l.level === "warning");
+    const errors = capturer.getErrors();
+    const warnings = capturer.getWarnings();
+    const network = capturer.getNetwork();
+    const confidence = ok ? (levelUsed === 0 ? 0.95 : 0.85) : 0;
 
     res.json({
-      success: ok, confidence: ok ? 0.92 : 0,
-      message: ok ? `Done: ${action} ${target}` : `Failed: ${errMsg}`,
-      screenshotBefore: before, screenshotAfter: after,
-      consoleLogs: { errors: errors.slice(0, 20), warnings: warnings.slice(0, 20) },
-      networkRequests: capturedNetwork
-        .filter((n: any) => n.type === "response")
+      success: ok,
+      confidence,
+      message: ok
+        ? `Done: ${action} ${target}`
+        : `Failed: ${errMsg}`,
+      screenshotBefore: before,
+      screenshotAfter: after,
+      consoleLogs: {
+        errors: errors.slice(0, 20),
+        warnings: warnings.slice(0, 20),
+      },
+      networkRequests: network
+        .filter((n) => n.type === "response")
         .slice(-30)
-        .map((n: any) => ({ method: n.method, url: n.url, status: n.status, timing: n.timing })),
+        .map((n) => ({
+          method: n.method,
+          url: n.url,
+          status: n.status,
+          timing: n.timing,
+        })),
       pageState: state,
-      duration_ms: Date.now() - stepStart,
+      duration_ms: Date.now() - stepStart(),
     });
-  } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
+
+// Track step start time via a simple variable for the legacy endpoint
+let _stepStart = Date.now();
+function stepStart(): number {
+  const now = Date.now();
+  const prev = _stepStart;
+  _stepStart = now;
+  return prev;
+}
 
 app.post("/agent/screenshot", async (req, res) => {
   try {
     await ensureBrowser();
     const full = req.body?.full === true;
     res.json({ success: true, screenshot: await smartScreenshot(full) });
-  } catch (e: any) { res.status(500).json({ success: false, message: e.message }); }
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
 });
 
-app.get("/health", (_req, res) => res.json({
-  status: "ok", version: "0.1.0",
-  browserReady: browser !== null, pageUrl: page?.url() || null,
-}));
+app.get("/health", (_req, res) => {
+  const page = getPage();
+  res.json({
+    status: "ok",
+    version: "0.1.0",
+    browserReady: page !== null,
+    pageUrl: page?.url() || null,
+  });
+});
 
 app.post("/cleanup", async (_req, res) => {
-  if (browser) await browser.close();
-  browser = null; context = null; page = null; cdp = null; agent = null;
-  capturedLogs.length = 0; capturedNetwork.length = 0;
+  await capturer.detach();
+  await closeBrowser();
   res.json({ success: true });
 });
 
+// ---------------------------------------------------------------------------
+// New run management endpoints
+// ---------------------------------------------------------------------------
+
+app.post("/run/create", (req, res) => {
+  try {
+    // Accept both snake_case (from Python client) and camelCase
+    const body = req.body as { runId?: string; run_id?: string; entry?: RunEntry };
+    const runId = body.runId || body.run_id || "";
+    if (!runId || !body.entry) {
+      res.status(400).json({ success: false, message: "runId/run_id and entry required" });
+      return;
+    }
+    const state = runManager.create(runId, body.entry);
+    res.json({ success: true, run_id: state.runId, status: state.status, totalSteps: state.totalSteps });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.post("/run/:id/start", async (req, res) => {
+  try {
+    const { id } = req.params;
+    // Fire and forget — client tracks progress via WebSocket
+    runManager.start(id).catch((err) => {
+      console.error(`[RunManager] Run ${id} error:`, err);
+    });
+    res.json({ success: true, runId: id, message: "Run started" });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.post("/run/:id/cancel", (req, res) => {
+  try {
+    const { id } = req.params;
+    runManager.cancel(id);
+    res.json({ success: true, runId: id, message: "Run cancelled" });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.get("/run/:id/progress", (req, res) => {
+  try {
+    const { id } = req.params;
+    const progress = runManager.getProgress(id);
+    if (!progress) {
+      res.status(404).json({ success: false, message: `Run not found: ${id}` });
+      return;
+    }
+    res.json({ success: true, ...progress });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.get("/run/:id/status", (req, res) => {
+  try {
+    const { id } = req.params;
+    const status = runManager.getStatus(id);
+    if (!status) {
+      res.status(404).json({ success: false, message: `Run not found: ${id}` });
+      return;
+    }
+    res.json({ success: true, run: status });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Start server
+// ---------------------------------------------------------------------------
 const PORT = parseInt(process.env.PORT || "3100", 10);
-app.listen(PORT, () => console.log(`[AutoTest Executor] :${PORT} CDP+Midscene`));
+server.listen(PORT, () => {
+  console.log(`[AutoTest Executor] :${PORT} CDP+Midscene+RunManager`);
+});

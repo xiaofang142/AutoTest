@@ -1,8 +1,14 @@
 FROM node:20-slim
+
+RUN npx playwright install chromium --with-deps
+
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+
+COPY package*.json ./
+RUN npm ci
+
 COPY . .
-RUN npm run build
+RUN npx tsc
+
 EXPOSE 3100
 CMD ["npm", "start"]
