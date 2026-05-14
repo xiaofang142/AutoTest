@@ -35,6 +35,7 @@ export const runApi = {
   progress: (id: string) => api.get(`/runs/${id}/progress`),
   cancel: (id: string) => api.post(`/runs/${id}/cancel`),
   retry: (id: string, cids?: string[]) => api.post(`/runs/${id}/retry`, { case_ids: cids }),
+  list: (pid: string) => api.get(`/projects/${pid}/runs`),
 };
 
 export const reportApi = {
