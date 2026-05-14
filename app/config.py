@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
     s3_bucket: str = "autotest"
-    executor_mode: str = "mock"
+    executor_mode: str = "real"
     executor_web_url: str = "http://localhost:3100"
     executor_android_url: str = "http://localhost:3101"
     executor_ios_url: str = "http://localhost:3102"

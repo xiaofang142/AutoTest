@@ -19,7 +19,6 @@ def ok(label, cond, detail=""):
 
 def parse_args():
     parser = argparse.ArgumentParser(description="AutoTest E2E Demo")
-    parser.add_argument("--mode", choices=["mock", "real"], default="mock", help="Executor mode")
     parser.add_argument("--url", default="https://admin.example.com/login", help="Target URL")
     return parser.parse_args()
 
@@ -78,13 +77,10 @@ async def main():
 
         print("\n[5/7] 执行引擎 — 打开浏览器 → 执行步骤 → 采集数据")
         from app.engine.execution_engine import ExecutionEngine
-        from app.infrastructure.executor import create_executor_client, ExecutorFactory
+        from app.infrastructure.executor import ExecutorFactory
         from app.services.analysis_service import CrossDimensionAnalyzer
-        if args.mode == "real":
-            print("  🌐 Real executor mode — requires running executor at http://localhost:3100")
-            executor = ExecutorFactory.create(platform="web", mode="real")
-        else:
-            executor = create_executor_client()
+        print("  🌐 Real executor — requires executor-web running at http://localhost:3100")
+        executor = ExecutorFactory.create(platform="web")
         analyzer = CrossDimensionAnalyzer(defect_repo)
         engine = ExecutionEngine(run_repo, scenario_repo, defect_repo, executor, analyzer)
 
@@ -126,8 +122,7 @@ async def main():
     print(f"\n{'='*70}")
     print(f"  结果: {PASS}/{total} 通过, {FAIL}/{total} 失败")
     print(f"{'='*70}")
-    mode_label = "🌐 Real Midscene" if args.mode == "real" else "🔧 Mock"
-    print(f"\n  模式: {mode_label} 浏览器执行:")
+    print(f"\n  模式: 🌐 Real Midscene 浏览器执行:")
     print(f"    cd executor/web && npx playwright install chromium && npx tsx src/index.ts")
     print(f"    .env: EXECUTOR_MODE=real")
     return FAIL == 0

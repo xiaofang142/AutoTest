@@ -8,7 +8,7 @@ class ExecutorClient(ABC):
     @property
     @abstractmethod
     def mode(self) -> str:
-        """返回 'real' 或 'mock'"""
+        """返回执行器类型，始终为 'real'"""
         ...
 
     @abstractmethod
