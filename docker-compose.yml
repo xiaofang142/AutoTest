@@ -40,6 +40,16 @@ services:
       - redisdata:/data
     restart: unless-stopped
 
+  executor-web:
+    build:
+      context: ./executor/web
+      dockerfile: Dockerfile
+    ports: ["3100:3100"]
+    environment:
+      PORT: 3100
+      OPENAI_API_KEY: ${LITELLM_API_KEY}
+    restart: unless-stopped
+
 volumes:
   pgdata:
   redisdata:

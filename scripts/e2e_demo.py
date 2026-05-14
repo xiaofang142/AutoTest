@@ -2,6 +2,7 @@
 """AutoTest E2E: create project → parse doc → generate → execute → report"""
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import argparse
 import asyncio
 from httpx import AsyncClient, ASGITransport
 from app.main import app
@@ -16,7 +17,16 @@ def ok(label, cond, detail=""):
     if cond: PASS += 1; print(f"  ✅ {label}")
     else: FAIL += 1; print(f"  ❌ {label}: {detail}")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="AutoTest E2E Demo")
+    parser.add_argument("--mode", choices=["mock", "real"], default="mock", help="Executor mode")
+    parser.add_argument("--url", default="https://admin.example.com/login", help="Target URL")
+    return parser.parse_args()
+
+
 async def main():
+    args = parse_args()
+
     print("\n" + "="*70 + "\n  AutoTest E2E: 需求→设计→编码→测试→修复\n" + "="*70)
     init_services()
     transport = ASGITransport(app=app)
@@ -25,7 +35,7 @@ async def main():
     defect_repo = _MemDefectRepo()
     scenario_repo = _MemScenarioRepo()
 
-    TARGET_URL = "https://admin.example.com/login"
+    TARGET_URL = args.url
 
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         print("\n[1/7] 创建项目 — 输入名称 + 被测系统URL")
@@ -68,9 +78,13 @@ async def main():
 
         print("\n[5/7] 执行引擎 — 打开浏览器 → 执行步骤 → 采集数据")
         from app.engine.execution_engine import ExecutionEngine
-        from app.infrastructure.executor import create_executor_client
+        from app.infrastructure.executor import create_executor_client, ExecutorFactory
         from app.services.analysis_service import CrossDimensionAnalyzer
-        executor = create_executor_client()
+        if args.mode == "real":
+            print("  🌐 Real executor mode — requires running executor at http://localhost:3100")
+            executor = ExecutorFactory.create(platform="web", mode="real")
+        else:
+            executor = create_executor_client()
         analyzer = CrossDimensionAnalyzer(defect_repo)
         engine = ExecutionEngine(run_repo, scenario_repo, defect_repo, executor, analyzer)
 
@@ -112,9 +126,8 @@ async def main():
     print(f"\n{'='*70}")
     print(f"  结果: {PASS}/{total} 通过, {FAIL}/{total} 失败")
     print(f"{'='*70}")
-    print(f"\n  完整SDD流程验证通过:")
-    print(f"  需求→架构→编码→测试→修复")
-    print(f"\n  切换到真实 Midscene 浏览器执行:")
+    mode_label = "🌐 Real Midscene" if args.mode == "real" else "🔧 Mock"
+    print(f"\n  模式: {mode_label} 浏览器执行:")
     print(f"    cd executor/web && npx playwright install chromium && npx tsx src/index.ts")
     print(f"    .env: EXECUTOR_MODE=real")
     return FAIL == 0
