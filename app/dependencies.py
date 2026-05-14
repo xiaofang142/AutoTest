@@ -94,8 +94,13 @@ class _MemDefectRepo(DefectRepository):
 
 
 def _create_ai():
-    from app.infrastructure.ai.lite_llm_service import LiteLLMAIService
-    return LiteLLMAIService()
+    from app.config import settings
+    if settings.litellm_api_key:
+        from app.infrastructure.ai.lite_llm_service import LiteLLMAIService
+        return LiteLLMAIService()
+    from app.lib.logger import get_logger
+    get_logger('deps').info('No LITELLM_API_KEY - AI features disabled, using rule-based analysis')
+    return None
 
 
 def init_services(project_repo=None, document_repo=None, kb_repo=None,

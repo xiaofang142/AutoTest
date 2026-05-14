@@ -1,65 +1,46 @@
-import hashlib
-import json
+"""LiteLLM AI service - gracefully degrades to rule-based when no API key configured."""
+import json, re, hashlib
+from typing import Optional
 from app.interfaces.ai_service import AIService
 from app.config import settings
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
 
-EXTRACT_PROMPTS = {
-    "general": {
-        "system": "You are a senior business analyst. Extract business processes and rules from the product document. Output JSON: {\"business_lines\": [{\"name\": \"...\", \"steps\": [...]}], \"rules\": [{\"category\": \"flow|rule|permission|ui\", \"content\": \"...\", \"page\": \"...\", \"role\": \"...\"}]}",
-        "user": "Document content:\n\n{content}",
-    },
-    "structured": {
-        "system": "You are a test architect. Extract testable rules strictly following this JSON schema: {\"rules\": [{\"category\": \"flow|rule|permission|ui\", \"content\": \"...\", \"page\": \"...\", \"role\": \"...\"}]}",
-        "user": "Document:\n\n{content}",
-    },
-}
-
-ROOT_CAUSE_PROMPT = {
-    "system": "You are a QA debug expert. Analyze multi-dimensional defect data (console logs, API calls, page state) and find root cause. Output JSON: {\"root_cause\": \"...\", \"confidence\": \"high|medium|low\", \"evidence\": [\"...\"], \"suggestion\": \"...\"}",
-    "user": "Defect evidence:\n\n{evidence_json}",
-}
-
-FIX_SUGGEST_PROMPT = {
-    "system": "You are a senior engineer. Based on defect analysis, generate fix suggestions. Output JSON: {\"target\": \"frontend|backend\", \"file_hint\": \"...\", \"description\": \"...\", \"code_snippet\": \"...\"}",
-    "user": "Defect data:\n\n{defect_json}",
-}
-
-CAUSAL_JUDGE_PROMPT = {
-    "system": "You are a fault analysis expert. Determine if event A caused event B. Answer YES or NO only.",
-    "user": "Event A (earlier): {event_a}\nEvent B (later): {event_b}\nDid A cause B?",
-}
-
 
 class LiteLLMAIService(AIService):
-    """Real AI service with LiteLLM. Supports OpenAI/Claude/Gemini/GLM via config."""
+    """AI service that uses LiteLLM when API key is available.
+    
+    When LITELLM_API_KEY is empty, falls back to rule-based analysis.
+    This ensures the system works WITHOUT any external API key.
+    """
 
     def __init__(self):
         self.extraction_model = settings.extraction_model
         self.analysis_model = settings.analysis_model
         self.api_key = settings.litellm_api_key
         self._cache = {}
+        self._llm_available = bool(self.api_key)
 
-    def _cache_key(self, model, prompt):
-        return hashlib.sha256(f"{model}:{prompt}".encode()).hexdigest()
+        if not self._llm_available:
+            logger.info("No LITELLM_API_KEY configured - using rule-based analysis (zero external cost)")
+
+    def _check_llm(self):
+        if not self._llm_available:
+            raise RuntimeError("LLM unavailable - no API key configured")
 
     async def _call_llm(self, model, system, user, use_cache=True):
+        self._check_llm()
         import litellm
         prompt_text = system + user
-        key = self._cache_key(model, prompt_text)
+        key = hashlib.sha256(f"{model}:{prompt_text}".encode()).hexdigest()
         if use_cache and key in self._cache:
-            logger.debug(f"AI cache hit")
             return self._cache[key]
-
-        logger.info(f"AI call: model={model}")
+        logger.info(f"LLM call: model={model} len={len(prompt_text)}")
         try:
             resp = await litellm.acompletion(
-                model=model,
-                api_key=self.api_key,
-                messages=[{"role": "system", "content": system},
-                          {"role": "user", "content": user}],
+                model=model, api_key=self.api_key,
+                messages=[{"role":"system","content":system},{"role":"user","content":user}],
                 temperature=0.1, max_tokens=4096,
             )
             result = resp.choices[0].message.content.strip()
@@ -67,54 +48,112 @@ class LiteLLMAIService(AIService):
                 self._cache[key] = result
             return result
         except Exception as e:
-            logger.error(f"AI call failed: {e}")
+            logger.error(f"LLM failed: {e}")
             raise
 
+    # ─── Rule-based fallbacks used when no API key ─────────────────────
+
+    def _rule_extract(self, content: str, strategy: str) -> dict:
+        """Zero-cost keyword-based extraction."""
+        lines = content.split("\n")
+        rules = []
+        flow_keywords = ["登录", "注册", "下单", "支付", "搜索", "查看", "编辑", "删除", "创建", "提交"]
+        permission_keywords = ["管理员", "普通用户", "VIP", "权限", "角色"]
+        for line in lines[:50]:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            category = "rule"
+            if any(k in line for k in flow_keywords):
+                category = "flow"
+            elif any(k in line for k in permission_keywords):
+                category = "permission"
+            rules.append({"category": category, "content": line[:200]})
+        return {"rules": rules[:20], "strategies_used": [strategy], "engine": "rule-based"}
+
+    def _rule_root_cause(self, evidence: dict) -> dict:
+        errors = evidence.get("console_errors", [])
+        api_statuses = evidence.get("api_statuses", [])
+        cause = "No clear root cause detected (rule-based analysis)"
+        confidence = "low"
+        if any(e for e in errors):
+            cause = f"Console error detected: {errors[0].get('message','')[:100]}"
+            confidence = "medium"
+        if any(a.get("status", 0) >= 500 for a in api_statuses):
+            cause = f"API 5xx error: {api_statuses[0].get('url','')} returned {api_statuses[0].get('status')}"
+            confidence = "high"
+        return {"root_cause": cause, "confidence": confidence,
+                "evidence": errors[:2], "engine": "rule-based"}
+
+    def _rule_fix_suggestion(self, defect_data: dict) -> dict:
+        return {"target": "unknown", "description": "AI fix suggestion requires API key",
+                "code_snippet": "", "engine": "rule-based"}
+
+    def _rule_causal_judge(self, event_a: dict, event_b: dict) -> bool:
+        dim_a = event_a.get("dimension", "")
+        dim_b = event_b.get("dimension", "")
+        causal_map = {
+            ("api", "console"): True,
+            ("api", "ui"): True,
+            ("console", "ui"): True,
+            ("api", "api"): True,
+        }
+        return causal_map.get((dim_a, dim_b), False)
+
+    # ─── Public API ───────────────────────────────────────────────────
+
     async def extract_rules(self, content: str, strategy: str = "general") -> dict:
-        import re
-        tmpl = EXTRACT_PROMPTS.get(strategy, EXTRACT_PROMPTS["general"])
+        if not self._llm_available:
+            return self._rule_extract(content, strategy)
         try:
+            tmpl = self._get_prompt(strategy)
             result = await self._call_llm(self.extraction_model, tmpl["system"],
                                           tmpl["user"].format(content=content[:8000]))
             match = re.search(r'\{.*\}', result, re.DOTALL)
-            if match:
-                parsed = json.loads(match.group())
-                logger.info(f"Extracted {len(parsed.get('rules', []))} rules")
-                return parsed
-            return {"rules": [], "raw": result}
+            return json.loads(match.group()) if match else {"rules": []}
         except Exception as e:
-            logger.error(f"Extract failed: {e}")
-            return {"rules": [], "error": str(e)}
+            logger.warning(f"LLM extract failed, fallback to rule: {e}")
+            return self._rule_extract(content, strategy)
+
+    def _get_prompt(self, strategy):
+        prompts = {
+            "general": {"system": "Extract business rules as JSON: {\"rules\":[{\"category\":\"flow|permission|ui\",\"content\":\"...\"}]}", "user": "{content}"},
+            "structured": {"system": "Extract strictly: {\"rules\":[{\"category\":\"...\",\"content\":\"...\"}]}", "user": "{content}"},
+        }
+        return prompts.get(strategy, prompts["general"])
 
     async def analyze_root_cause(self, evidence: dict) -> dict:
-        import re
+        if not self._llm_available:
+            return self._rule_root_cause(evidence)
         try:
-            result = await self._call_llm(self.analysis_model, ROOT_CAUSE_PROMPT["system"],
-                                          ROOT_CAUSE_PROMPT["user"].format(
-                                              evidence_json=json.dumps(evidence, indent=2)[:6000]))
+            prompt = """Analyze root cause. Output JSON: {"root_cause":"...","confidence":"high|medium|low","evidence":[...]}"""
+            result = await self._call_llm(self.analysis_model, prompt,
+                                          json.dumps(evidence, indent=2)[:6000])
             match = re.search(r'\{.*\}', result, re.DOTALL)
             return json.loads(match.group()) if match else {"root_cause": "parsing error"}
         except Exception as e:
-            logger.error(f"Root cause failed: {e}")
-            return {"root_cause": "unavailable"}
+            logger.warning(f"LLM root cause failed, fallback: {e}")
+            return self._rule_root_cause(evidence)
 
     async def generate_fix_suggestion(self, defect_data: dict) -> dict:
-        import re
+        if not self._llm_available:
+            return self._rule_fix_suggestion(defect_data)
         try:
-            result = await self._call_llm(self.analysis_model, FIX_SUGGEST_PROMPT["system"],
-                                          FIX_SUGGEST_PROMPT["user"].format(
-                                              defect_json=json.dumps(defect_data, indent=2)[:6000]))
+            prompt = """Generate fix suggestion. Output JSON: {"target":"frontend|backend","file_hint":"...","description":"...","code_snippet":"..."}"""
+            result = await self._call_llm(self.analysis_model, prompt,
+                                          json.dumps(defect_data, indent=2)[:6000])
             match = re.search(r'\{.*\}', result, re.DOTALL)
             return json.loads(match.group()) if match else {"description": "parsing error"}
         except Exception as e:
-            logger.error(f"Fix suggestion failed: {e}")
-            return {"description": "unavailable"}
+            logger.warning(f"LLM fix failed, fallback: {e}")
+            return self._rule_fix_suggestion(defect_data)
 
     async def judge_causal_relation(self, event_a: dict, event_b: dict) -> bool:
+        if not self._llm_available:
+            return self._rule_causal_judge(event_a, event_b)
         try:
-            result = await self._call_llm(self.analysis_model, CAUSAL_JUDGE_PROMPT["system"],
-                                          CAUSAL_JUDGE_PROMPT["user"].format(
-                                              event_a=json.dumps(event_a), event_b=json.dumps(event_b)))
+            prompt = f"Did event A cause B? A:{event_a} B:{event_b}. Answer YES or NO."
+            result = await self._call_llm(self.analysis_model, "You are a fault analyst.", prompt)
             return "YES" in result.upper()
         except Exception:
-            return False
+            return self._rule_causal_judge(event_a, event_b)
