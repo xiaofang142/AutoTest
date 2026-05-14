@@ -9,6 +9,13 @@ logger = get_logger(__name__)
 class MockExecutorClient(ExecutorClient):
     """Mock executor for development/testing without real browser."""
 
+    @property
+    def mode(self) -> str:
+        return "mock"
+
+    async def ping(self) -> bool:
+        return False
+
     async def execute_step(self, step: TestStep, context: dict | None = None) -> StepExecutionRecord:
         logger.info(f"Mock execute: step={step.index} action={step.action}")
         return StepExecutionRecord(

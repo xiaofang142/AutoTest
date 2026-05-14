@@ -1,11 +1,23 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 from app.domain.models.run import StepExecutionRecord
 from app.domain.models.scenario import TestStep
 
 
 class ExecutorClient(ABC):
+    @property
     @abstractmethod
-    async def execute_step(self, step: TestStep, context: dict) -> StepExecutionRecord:
+    def mode(self) -> str:
+        """返回 'real' 或 'mock'"""
+        ...
+
+    @abstractmethod
+    async def ping(self) -> bool:
+        """健康检查"""
+        ...
+
+    @abstractmethod
+    async def execute_step(self, step: TestStep, context: Optional[dict] = None) -> StepExecutionRecord:
         ...
 
     @abstractmethod
