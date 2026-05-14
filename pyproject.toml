@@ -46,3 +46,7 @@ python_version = "3.11"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: integration tests requiring external services",
+    "executor: tests requiring running executor service at http://localhost:3100",
+]

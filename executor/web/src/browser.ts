@@ -15,27 +15,27 @@ let agent: PageAgent | null = null;
  */
 export async function ensureBrowser(
   viewport?: { width: number; height: number }
-): Promise<{ browser: Browser; context: BrowserContext; page: Page; cdpSession: CDPSession; agent: PageAgent }> {
-  if (!browser) {
+): Promise<{ browser: Browser; context: BrowserContext; page: Page; cdpSession: CDPSession }> {
+  const needsRestart = !browser || !context || context.pages().length === 0;
+  if (needsRestart) {
+    if (browser) { try { await browser.close(); } catch {} }
     browser = await chromium.launch({ headless: true, args: ["--no-sandbox"] });
     context = await browser.newContext({
       viewport: viewport || { width: 1920, height: 1080 },
     });
-    const p = await context.newPage();
-    page = p;
-    cdpSession = await context.newCDPSession(p);
-    agent = new PageAgent(p as any);
-    console.log("[Browser] Chromium + CDP + Midscene ready");
+    page = await context.newPage();
+    cdpSession = await context.newCDPSession(page);
+    console.log("[Browser] Chromium + CDP ready");
   }
-  // Recreate page if it was closed (e.g., by cross-origin nav or crash)
-  if (page && page.isClosed()) {
-    console.log("[Browser] Page was closed, creating new page");
-    const p = await context!.newPage();
-    page = p;
-    cdpSession = await context!.newCDPSession(p);
-    agent = new PageAgent(p as any);
+  return { browser: browser!, context: context!, page: page!, cdpSession: cdpSession! };
+}
+
+export function ensureAgent(): PageAgent {
+  if (!agent) {
+    agent = new PageAgent(page as any);
+    console.log("[Browser] Midscene agent created");
   }
-  return { browser: browser!, context: context!, page: page!, cdpSession: cdpSession!, agent: agent! };
+  return agent!;
 }
 
 export function getPage(): Page | null {

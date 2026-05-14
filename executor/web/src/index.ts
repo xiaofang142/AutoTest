@@ -1,9 +1,10 @@
 import http from "http";
 import express from "express";
 import cors from "cors";
-import { ensureBrowser, getPage, closeBrowser, pageState, smartScreenshot } from "./browser.js";
+import { ensureBrowser, ensureAgent, getPage, closeBrowser, pageState, smartScreenshot } from "./browser.js";
 import { Capturer } from "./capturer.js";
 import { Reporter } from "./reporter.js";
+import { discover } from "./discovery/page-discoverer.js";
 import { RunManager } from "./run-manager.js";
 import { executeStep } from "./step-executor.js";
 import type { RunEntry } from "./types.js";
@@ -30,12 +31,14 @@ const runManager = new RunManager(capturer, reporter);
 
 app.post("/agent/navigate", async (req, res) => {
   try {
-    const { page } = await ensureBrowser();
+    const { page, cdpSession } = await ensureBrowser();
     const { url } = req.body;
     if (!url) {
       res.status(400).json({ success: false, message: "URL required" });
       return;
     }
+    // Ensure clean CDP state — disable any stale Fetch interception
+    try { await cdpSession.send("Fetch.disable"); } catch {}
     await page.goto(url, { waitUntil: "load", timeout: 45000 });
     res.json({
       success: true,
@@ -70,7 +73,7 @@ app.post("/agent/execute", async (req, res) => {
 
     // Level 0: Midscene AI
     try {
-      const agent = (await ensureBrowser()).agent;
+      const agent = ensureAgent();
       const instruction = `${step.action} ${step.target}`;
       await agent.ai(value ? `${instruction} with value "${value}"` : instruction);
       const page = getPage()!;
@@ -162,6 +165,16 @@ app.post("/agent/screenshot", async (req, res) => {
     await ensureBrowser();
     const full = req.body?.full === true;
     res.json({ success: true, screenshot: await smartScreenshot(full) });
+  } catch (e: any) {
+    res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+app.post("/agent/discover", async (req, res) => {
+  try {
+    const { page } = await ensureBrowser();
+    const result = await discover(page);
+    res.json({ success: true, ...result });
   } catch (e: any) {
     res.status(500).json({ success: false, message: e.message });
   }

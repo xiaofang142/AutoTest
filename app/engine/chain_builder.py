@@ -2,6 +2,7 @@
 import json, re
 from typing import Optional
 from app.domain.models.knowledge import BusinessRule, KnowledgeBase
+from app.domain.models.discovery import DiscoveredElement
 from app.domain.models.scenario import TestScenario, TestCase, TestStep
 from app.interfaces.ai_service import AIService
 from app.lib.id_generator import generate_id
@@ -128,23 +129,31 @@ class ChainBuilder:
             logger.error(f"AI flow extraction failed: {e}")
             return []
 
-    def generate_test_chains(self, business_chains: list[dict]) -> list[TestScenario]:
+    def generate_test_chains(
+        self,
+        business_chains: list[dict],
+        page_elements: Optional[list[DiscoveredElement]] = None,
+    ) -> list[TestScenario]:
         """For each business chain × role × path type, generate test scenarios."""
         scenarios = []
         for chain in business_chains:
             for role in chain.get("roles", ["普通用户"]):
                 for path_type in ["positive", "boundary", "abnormal", "permission"]:
-                    scenario = self._build_scenario(chain, role, path_type)
+                    scenario = self._build_scenario(chain, role, path_type, page_elements=page_elements)
                     if scenario:
                         scenarios.append(scenario)
         return scenarios
 
-    def _build_scenario(self, chain: dict, role: str, path_type: str) -> Optional[TestScenario]:
+    def _build_scenario(
+        self, chain: dict, role: str, path_type: str,
+        page_elements: Optional[list[DiscoveredElement]] = None,
+    ) -> Optional[TestScenario]:
         steps = chain.get("steps", [])
         if not steps:
             return None
 
         type_names = {"positive": "正向流程", "boundary": "边界条件", "abnormal": "异常流程", "permission": "权限验证"}
+        expected_status = "failure" if path_type == "abnormal" else "success"
         scenario = TestScenario(
             id=generate_id("scenario"),
             project_id="",
@@ -152,6 +161,7 @@ class ChainBuilder:
             name=f"{chain.get('name', '业务')} - {type_names.get(path_type, path_type)}",
             type=path_type,
             role=role,
+            expected_status=expected_status,
         )
 
         case = TestCase(id=generate_id("test_case"), scenario_id=scenario.id, project_id="",
@@ -172,9 +182,15 @@ class ChainBuilder:
                 action = f"{action}（边界值验证）"
                 expected = "边界值处理正确"
 
+            # Use real element text as target when page elements are available
+            if page_elements:
+                target = self._find_closest_element(action, step.get("page", ""), page_elements)
+            else:
+                target = step.get("page", "")
+
             case.steps.append(TestStep(
                 index=i + 1, action=action,
-                target=step.get("page", ""),
+                target=target,
                 value="",
                 verifications=["ui", "console", "api"],
                 expected={"business": expected},
@@ -182,3 +198,21 @@ class ChainBuilder:
 
         scenario.cases = [case]
         return scenario
+
+    def _find_closest_element(
+        self, action: str, page: str, elements: list[DiscoveredElement],
+    ) -> str:
+        """Match step action/page description to the closest discovered element text."""
+        query = (action + " " + page).lower()
+        query_tokens = [w for w in re.split(r'[\s,，。.；;:：()（）【】\[\]{}-]', query) if len(w) >= 2]
+        best_match = page
+        best_score = 0
+        for elem in elements:
+            text = (elem.text or "").lower().strip()
+            if not text:
+                continue
+            score = sum(1 for tok in query_tokens if tok in text)
+            if score > best_score:
+                best_score = score
+                best_match = elem.text
+        return best_match

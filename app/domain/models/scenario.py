@@ -50,5 +50,6 @@ class TestScenario(BaseModel):
     cases: list[TestCase] = []
     coverage: CoverageInfo = CoverageInfo()
     status: str = "draft"
+    expected_status: str = "success"
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

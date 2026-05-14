@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ConsoleLogEntry(BaseModel):
@@ -77,6 +77,14 @@ class RunSummary(BaseModel):
     failed: int = 0
     uncertain: int = 0
     pass_rate: float = 0.0
+
+    @model_validator(mode='after')
+    def _compute_pass_rate(self):
+        """Auto-compute pass_rate, excluding uncertain steps from the denominator."""
+        total = self.total_cases - self.uncertain if self.uncertain > 0 else self.total_cases
+        if self.total_cases > 0 and total > 0:
+            self.pass_rate = round(self.passed / total, 4)
+        return self
 
 
 class RunRecord(BaseModel):

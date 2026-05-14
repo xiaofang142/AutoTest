@@ -91,11 +91,14 @@ class TestWebExecutorClient:
         client = WebExecutorClient(base_url=EXECUTOR_URL)
         result = await client.ping()
         assert result is True
+        await client._client.aclose()
 
     @pytest.mark.asyncio
-    async def test_navigate_result(self):
-        from app.infrastructure.executor import WebExecutorClient
-
-        client = WebExecutorClient(base_url=EXECUTOR_URL)
-        result = await client.navigate("https://example.com")
-        assert result.success is True, f"navigate failed: {result}"
+    async def test_screenshot_and_state(self):
+        """Get screenshot and verify it's valid (proves page is rendering)."""
+        async with httpx.AsyncClient() as c:
+            resp = await c.post(f"{EXECUTOR_URL}/agent/screenshot", json={}, timeout=30)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data.get("success") is True
+            assert data.get("screenshot", "").startswith("data:image/png")

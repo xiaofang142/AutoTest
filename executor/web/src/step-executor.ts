@@ -1,6 +1,6 @@
 import type { Page } from "playwright";
 import type { ExecutableStep, StepResult } from "./types.js";
-import { getPage, getAgent, pageState, smartScreenshot } from "./browser.js";
+import { getPage, ensureAgent, pageState, smartScreenshot } from "./browser.js";
 
 /**
  * Execute a single test step with a 4-level fallback chain.
@@ -19,7 +19,7 @@ export async function executeStep(
   timeoutMs: number = 30000
 ): Promise<StepResult> {
   const page = getPage();
-  const agent = getAgent();
+  const agent = ensureAgent();
   const stepStart = Date.now();
 
   const stepName = step.name || `${step.action} ${step.target || ""}`;
