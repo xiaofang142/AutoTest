@@ -1,6 +1,7 @@
 """Multi-stage document parser with chunking, classification, and flow extraction."""
-import hashlib, json, re
-from typing import Optional
+import json
+import re
+
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -88,5 +89,5 @@ class DocumentParser:
                 f"{STAGE2_PROMPTS[ctype]}\n\n{combined[:6000]}", "structured")
             return result.get(ctype + ("s" if ctype in ("flow","endpoint") else ""), [])
         except Exception as e:
-            logger.error(f"Extract {ctype} failed: {e}")
+            logger.error("Extract %s failed: %s", ctype, e)
             return []

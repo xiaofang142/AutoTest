@@ -1,12 +1,10 @@
 import { chromium, Browser, BrowserContext, Page, CDPSession } from "playwright";
-import { PageAgent } from "@midscene/web";
 import type { PageStateSnapshot } from "./types.js";
 
 let browser: Browser | null = null;
 let context: BrowserContext | null = null;
 let page: Page | null = null;
 let cdpSession: CDPSession | null = null;
-let agent: PageAgent | null = null;
 
 /**
  * Ensure a Chromium browser instance is running.
@@ -30,24 +28,12 @@ export async function ensureBrowser(
   return { browser: browser!, context: context!, page: page!, cdpSession: cdpSession! };
 }
 
-export function ensureAgent(): PageAgent {
-  if (!agent) {
-    agent = new PageAgent(page as any);
-    console.log("[Browser] Midscene agent created");
-  }
-  return agent!;
-}
-
 export function getPage(): Page | null {
   return page;
 }
 
 export function getCDP(): CDPSession | null {
   return cdpSession;
-}
-
-export function getAgent(): PageAgent | null {
-  return agent;
 }
 
 /**
@@ -65,7 +51,6 @@ export async function closeBrowser(): Promise<void> {
   context = null;
   page = null;
   cdpSession = null;
-  agent = null;
 }
 
 /**

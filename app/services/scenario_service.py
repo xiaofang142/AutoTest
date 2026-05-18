@@ -1,9 +1,9 @@
-from app.domain.models.scenario import TestScenario, TestCase, TestStep, CoverageInfo
-from app.domain.models.knowledge import BusinessRule
 from app.domain.exceptions import ScenarioNotFoundError
-from app.interfaces.repositories.scenario_repo import ScenarioRepository
-from app.interfaces.repositories.knowledge_repo import KnowledgeBaseRepository
+from app.domain.models.knowledge import BusinessRule
+from app.domain.models.scenario import CoverageInfo, TestCase, TestScenario, TestStep
 from app.interfaces.ai_service import AIService
+from app.interfaces.repositories.knowledge_repo import KnowledgeBaseRepository
+from app.interfaces.repositories.scenario_repo import ScenarioRepository
 from app.lib.id_generator import generate_id
 from app.lib.logger import get_logger
 
@@ -46,8 +46,8 @@ class ScenarioService:
             try:
                 await self._repo.create_scenario(s)
             except Exception as e:
-                logger.error(f"Save scenario failed: {e}")
-        logger.info(f"Generated {len(scenarios)} scenarios for {project_id}")
+                logger.error("Save scenario failed: %s", e)
+        logger.info("Generated %s scenarios for %s", len(scenarios), project_id)
         return scenarios
 
     async def _build_scenario(self, project_id, name, stype, rules, platforms):
@@ -72,7 +72,7 @@ class ScenarioService:
             return [BusinessRule(id=generate_id("rule"), kb_id="",
                 content=r.get("content",""), category=r.get("category","rule")) for r in raw]
         except Exception as e:
-            logger.error(f"AI extract failed: {e}")
+            logger.error("AI extract failed: %s", e)
             return []
 
     async def _generate_default_scenarios(self, project_id, platforms):
@@ -118,6 +118,6 @@ class ScenarioService:
             try:
                 await self._repo.create_scenario(s)
             except Exception as e:
-                logger.error(f"Save scenario failed: {e}")
-        logger.info(f"ChainBuilder: {len(scenarios)} scenarios from {len(chains)} chains")
+                logger.error("Save scenario failed: %s", e)
+        logger.info("ChainBuilder: %s scenarios from %s chains", len(scenarios), len(chains))
         return scenarios

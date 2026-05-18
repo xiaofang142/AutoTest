@@ -1,5 +1,5 @@
-from datetime import datetime
-from typing import Optional
+from datetime import datetime, timezone
+
 from pydantic import BaseModel, Field
 
 
@@ -12,8 +12,8 @@ class BusinessRule(BaseModel):
     source_strategy: str = ""
     confidence: float = 0.0
     status: str = "candidate"
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class UIStandard(BaseModel):
@@ -69,5 +69,5 @@ class KnowledgeBase(BaseModel):
     confirmed_rules: int = 0
     conflicts_count: int = 0
     human_reviewed: bool = False
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

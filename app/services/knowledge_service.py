@@ -1,5 +1,5 @@
-from app.domain.models.knowledge import KnowledgeBase, BusinessRule, Conflict, QualityScore
 from app.domain.exceptions import KnowledgeBaseNotFoundError
+from app.domain.models.knowledge import BusinessRule, Conflict, KnowledgeBase
 from app.interfaces.repositories.knowledge_repo import KnowledgeBaseRepository
 from app.lib.id_generator import generate_id
 from app.lib.logger import get_logger
@@ -23,7 +23,7 @@ class KnowledgeService:
             project_id=project_id,
         )
         created = await self._repo.create(kb)
-        logger.info(f"Knowledge base created: {created.id}")
+        logger.info("Knowledge base created: %s", created.id)
         return created
 
     async def update_rule(self, rule_id: str, content: str, status: str = "confirmed") -> BusinessRule:

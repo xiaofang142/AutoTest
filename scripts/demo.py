@@ -18,16 +18,16 @@ logger = get_logger(__name__)
 async def run_demo(url: str, doc_urls: list[str], output: str = "",
                    format: str = "json", keep_project: bool = False,
                    no_screenshots: bool = False):
-    from app.dependencies import init_services, _MemRunRepo, _MemDefectRepo, _MemScenarioRepo
-    from app.lib.id_generator import generate_id
-    from app.infrastructure.executor import ExecutorFactory
-    from app.infrastructure.executor.page_discovery import PageDiscoveryClient
-    from app.services.contrast_service import ContrastService
-    from app.services.demo_report_service import DemoReportService
+    from app.dependencies import _MemDefectRepo, _MemRunRepo, _MemScenarioRepo, init_services
     from app.domain.models.run import RunRecord
     from app.domain.models.scenario import TestStep
     from app.engine.execution_engine import ExecutionEngine
+    from app.infrastructure.executor import ExecutorFactory
+    from app.infrastructure.executor.page_discovery import PageDiscoveryClient
+    from app.lib.id_generator import generate_id
     from app.services.analysis_service import CrossDimensionAnalyzer
+    from app.services.contrast_service import ContrastService
+    from app.services.demo_report_service import DemoReportService
 
     init_services()
     run_repo = _MemRunRepo()
@@ -53,10 +53,10 @@ async def run_demo(url: str, doc_urls: list[str], output: str = "",
         print(f"\n[1/6] 解析文档 ({len(doc_urls)} 个)...")
         for doc_url in doc_urls:
             print(f"  📄 {doc_url}")
-        print(f"  ✅ 文档解析完成")
+        print("  ✅ 文档解析完成")
 
     # Step 3: Page discovery
-    print(f"\n[2/6] 页面发现...")
+    print("\n[2/6] 页面发现...")
     discovery_client = PageDiscoveryClient()
     try:
         page = await discovery_client.discover()
@@ -72,7 +72,7 @@ async def run_demo(url: str, doc_urls: list[str], output: str = "",
         return 1
 
     # Step 4: Generate test steps (from page elements)
-    print(f"\n[3/6] 生成测试步骤...")
+    print("\n[3/6] 生成测试步骤...")
     steps = []
     for i, el in enumerate(elements[:10]):  # Top 10 elements
         action = "click" if el.type in ("button", "link", "nav-item") else "input"
@@ -88,7 +88,7 @@ async def run_demo(url: str, doc_urls: list[str], output: str = "",
     print(f"  ✅ 生成 {len(steps)} 个步骤")
 
     # Step 5: Execute
-    print(f"\n[4/6] 执行测试...")
+    print("\n[4/6] 执行测试...")
     run = RunRecord(id=generate_id("run"), project_id=project_id, status="running", platforms=["web"])
     run = await run_repo.create(run)
     analyzer = CrossDimensionAnalyzer(defect_repo=defect_repo)
@@ -98,7 +98,7 @@ async def run_demo(url: str, doc_urls: list[str], output: str = "",
     print(f"  ✅ 执行完成: {s.get('total', 0)} 步, {s.get('passed', 0)} 通过, {s.get('failed', 0)} 失败")
 
     # Step 6: Build output
-    print(f"\n[5/6] 生成报告...")
+    print("\n[5/6] 生成报告...")
     defects = []
     if hasattr(defect_repo, '_s'):
         defects = list(defect_repo._s.values())

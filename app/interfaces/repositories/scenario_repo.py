@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from app.domain.models.scenario import TestScenario, TestCase
+
+from app.domain.models.scenario import TestCase, TestScenario
 
 
 class ScenarioRepository(ABC):

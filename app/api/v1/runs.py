@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from app.domain.exceptions import RunNotFoundError, InvalidParameterError
+from app.domain.exceptions import InvalidParameterError, RunNotFoundError
 from app.services.run_service import RunService
 
 router = APIRouter(tags=["runs"])
@@ -69,6 +69,5 @@ async def get_run_history(project_id: str):
     service = _get_service()
     from app.dependencies import get_run_service
     s = get_run_service()
-    from app.interfaces.repositories.run_repo import RunRepository
     runs = await s.get_run_history(project_id)
     return {"code": 0, "data": {"items": runs, "total": len(runs)}}

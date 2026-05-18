@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException
 
 from app.domain.exceptions import (
-    ProjectNotFoundError,
     InvalidParameterError,
     OperationNotAllowedError,
+    ProjectNotFoundError,
 )
 from app.services.project_service import ProjectService
 

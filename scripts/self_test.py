@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from httpx import AsyncClient, ASGITransport
-from app.main import app
-from app.dependencies import init_services
 import asyncio
+
+from httpx import ASGITransport, AsyncClient
+
+from app.dependencies import init_services
+from app.main import app
 
 PASS = 0; FAIL = 0
 

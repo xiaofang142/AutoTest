@@ -1,17 +1,16 @@
 import type { Page } from "playwright";
 import type { ExecutableStep, StepResult } from "./types.js";
-import { getPage, ensureAgent, pageState, smartScreenshot } from "./browser.js";
+import { getPage, pageState, smartScreenshot } from "./browser.js";
 
 /**
- * Execute a single test step with a 4-level fallback chain.
+ * Execute a single test step with Playwright native locators (no AI vision).
  *
- * Level 0 – Midscene AI (PageAgent.ai natural language instruction)
- * Level 1 – Playwright locator API (getByRole, getByText, locator)
- * Level 2 – DOM querySelectorAll text matching via page.evaluate
- * Level 3 – XPath evaluation via document.evaluate
+ * Level 0 – Playwright locator API (getByRole, getByText, locator, getByPlaceholder)
+ * Level 1 – DOM querySelectorAll text matching via page.evaluate
+ * Level 2 – XPath evaluation via document.evaluate
  *
- * Each level catches errors and falls through to the next.
- * Returns a full StepResult with before/after screenshots and page state.
+ * Pure DOM-based execution — no screenshots sent to LLM.
+ * Saves OCR + DOM text for server-side analysis.
  */
 export async function executeStep(
   step: ExecutableStep,
@@ -19,7 +18,6 @@ export async function executeStep(
   timeoutMs: number = 30000
 ): Promise<StepResult> {
   const page = getPage();
-  const agent = ensureAgent();
   const stepStart = Date.now();
 
   const stepName = step.name || `${step.action} ${step.target || ""}`;
@@ -29,66 +27,45 @@ export async function executeStep(
   let message = "";
   let levelUsed = -1;
 
-  // Build instruction text
-  const instruction = buildInstruction(step);
-
-  // -- Level 0: Midscene AI --
-  if (!success && agent) {
+  // -- Level 0: Playwright locator API --
+  if (!success && page) {
     try {
-      await Promise.race([
-        agent.ai(instruction),
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("AI timeout")), timeoutMs)
-        ),
-      ]);
-      await page?.waitForTimeout(800);
+      await executePlaywrightLocator(page, step, timeoutMs);
       success = true;
-      message = `[Level 0] ${instruction}`;
+      message = `[Level 0] Playwright locator: ${step.action} ${step.target || ""}`;
       levelUsed = 0;
     } catch (e: any) {
       message = `Level 0 failed: ${e.message}`;
     }
   }
 
-  // -- Level 1: Playwright locator API --
+  // -- Level 1: DOM querySelectorAll --
   if (!success && page) {
     try {
-      await executePlaywrightLocator(page, step, timeoutMs);
+      await executeDomLevel(page, step, timeoutMs);
       success = true;
-      message = `[Level 1] Playwright locator: ${step.action} ${step.target || ""}`;
+      message = `[Level 1] DOM query: ${step.action} ${step.target || ""}`;
       levelUsed = 1;
     } catch (e: any) {
       message = `Level 1 failed: ${e.message}`;
     }
   }
 
-  // -- Level 2: DOM querySelectorAll --
+  // -- Level 2: XPath --
   if (!success && page) {
     try {
-      await executeDomLevel(page, step, timeoutMs);
+      await executeXPathLevel(page, step, timeoutMs);
       success = true;
-      message = `[Level 2] DOM query: ${step.action} ${step.target || ""}`;
+      message = `[Level 2] XPath: ${step.action} ${step.target || ""}`;
       levelUsed = 2;
     } catch (e: any) {
       message = `Level 2 failed: ${e.message}`;
     }
   }
 
-  // -- Level 3: XPath --
-  if (!success && page) {
-    try {
-      await executeXPathLevel(page, step, timeoutMs);
-      success = true;
-      message = `[Level 3] XPath: ${step.action} ${step.target || ""}`;
-      levelUsed = 3;
-    } catch (e: any) {
-      message = `Level 3 failed: ${e.message}`;
-    }
-  }
-
   const after = await smartScreenshot(success);
   const state = await pageState();
-  const confidence = success ? [0.95, 0.85, 0.7, 0.5][levelUsed] || 0 : 0;
+  const confidence = success ? [0.95, 0.85, 0.7][levelUsed] || 0 : 0;
 
   return {
     stepIndex,

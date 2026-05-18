@@ -1,4 +1,4 @@
-from app.domain.models.discovery import PageDiscoveryResult, DiscoveredElement
+from app.domain.models.discovery import DiscoveredElement, PageDiscoveryResult
 
 
 class PageDiscoveryClient:

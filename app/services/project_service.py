@@ -1,9 +1,9 @@
-from app.domain.models.project import Project
 from app.domain.exceptions import (
-    ProjectNotFoundError,
     InvalidParameterError,
     OperationNotAllowedError,
+    ProjectNotFoundError,
 )
+from app.domain.models.project import Project
 from app.interfaces.repositories.project_repo import ProjectRepository
 from app.lib.id_generator import generate_id
 from app.lib.logger import get_logger
@@ -45,7 +45,7 @@ class ProjectService:
             document_refs=docs or [],
         )
         created = await self._repo.create(project)
-        logger.info(f"Project created: {created.id}")
+        logger.info("Project created: %s", created.id)
         return created
 
     async def get_project(self, project_id: str) -> Project:
@@ -60,7 +60,7 @@ class ProjectService:
             if hasattr(project, key):
                 setattr(project, key, value)
         updated = await self._repo.update(project)
-        logger.info(f"Project updated: {project_id}")
+        logger.info("Project updated: %s", project_id)
         return updated
 
     async def delete_project(self, project_id: str) -> None:
@@ -68,7 +68,7 @@ class ProjectService:
         if project.status == "running":
             raise OperationNotAllowedError("Cannot delete a running project")
         await self._repo.delete(project_id)
-        logger.info(f"Project deleted: {project_id}")
+        logger.info("Project deleted: %s", project_id)
 
     async def list_projects(self, status: str | None = None) -> list[Project]:
         return await self._repo.list_projects(status)

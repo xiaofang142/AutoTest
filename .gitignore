@@ -12,3 +12,5 @@ build/
 *.db
 .DS_Store
 node_modules/
+data/
+*.db

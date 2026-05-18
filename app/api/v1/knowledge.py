@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app.domain.exceptions import KnowledgeBaseNotFoundError
 from app.services.knowledge_service import KnowledgeService

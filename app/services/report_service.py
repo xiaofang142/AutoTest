@@ -1,7 +1,5 @@
-from app.domain.models.run import RunRecord
-from app.domain.models.defect import Defect
-from app.interfaces.repositories.run_repo import RunRepository
 from app.interfaces.repositories.defect_repo import DefectRepository
+from app.interfaces.repositories.run_repo import RunRepository
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)

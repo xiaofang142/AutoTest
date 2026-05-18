@@ -1,7 +1,5 @@
-from datetime import datetime
-from app.domain.models.run import RunRecord, StepExecutionRecord, RunSummary
-from app.domain.models.scenario import TestCase
-from app.domain.exceptions import RunNotFoundError, InvalidParameterError
+from app.domain.exceptions import InvalidParameterError, RunNotFoundError
+from app.domain.models.run import RunRecord, StepExecutionRecord
 from app.interfaces.repositories.run_repo import RunRepository
 from app.interfaces.repositories.scenario_repo import ScenarioRepository
 from app.lib.id_generator import generate_id
@@ -35,7 +33,7 @@ class RunService:
             run.total_cases = len(cases)
 
         created = await self._repo.create(run)
-        logger.info(f"Run created: {created.id}, cases={run.total_cases}")
+        logger.info("Run created: %s, cases=%s", created.id, run.total_cases)
         return created
 
     async def get_run(self, run_id: str) -> RunRecord:
@@ -54,7 +52,7 @@ class RunService:
 
     async def cancel_run(self, run_id: str) -> None:
         await self._repo.update_status(run_id, "cancelled")
-        logger.info(f"Run cancelled: {run_id}")
+        logger.info("Run cancelled: %s", run_id)
 
     async def retry_run(self, run_id: str, case_ids: list[str] | None = None) -> RunRecord:
         original = await self.get_run(run_id)

@@ -1,13 +1,13 @@
 import http from "http";
 import express from "express";
 import cors from "cors";
-import { ensureBrowser, ensureAgent, getPage, closeBrowser, pageState, smartScreenshot } from "./browser.js";
+import { ensureBrowser, getPage, closeBrowser, pageState, smartScreenshot } from "./browser.js";
 import { Capturer } from "./capturer.js";
 import { Reporter } from "./reporter.js";
 import { discover } from "./discovery/page-discoverer.js";
 import { RunManager } from "./run-manager.js";
 import { executeStep } from "./step-executor.js";
-import type { RunEntry } from "./types.js";
+import type { RunEntry, ExecutableStep } from "./types.js";
 
 // ---------------------------------------------------------------------------
 // App setup
@@ -44,6 +44,7 @@ app.post("/agent/navigate", async (req, res) => {
       success: true,
       screenshot: await smartScreenshot(false),
       url: page.url(),
+      pageState: await pageState(),
     });
   } catch (e: any) {
     res.status(500).json({ success: false, message: e.message });
@@ -58,107 +59,48 @@ app.post("/agent/execute", async (req, res) => {
     // Clear capturer buffers for this execution
     capturer.clear();
 
-    // Build a synthetic step for the step-executor
-    const step = {
+    // Build a synthetic step for the pure-Playwright step-executor
+    const step: ExecutableStep = {
       name: `${action} ${target || ""}`,
       action: action || "click",
       target: target || "",
       value: value || undefined,
     };
 
-    const before = await smartScreenshot(false);
-    let ok = false;
-    let errMsg = "";
-    let levelUsed = -1;
+    // Execute via pure Playwright with 3-level fallback (no Midscene AI vision)
+    const result = await executeStep(step, 0, 30000);
 
-    // Level 0: Midscene AI
-    try {
-      const agent = ensureAgent();
-      const instruction = `${step.action} ${step.target}`;
-      await agent.ai(value ? `${instruction} with value "${value}"` : instruction);
-      const page = getPage()!;
-      await page.waitForTimeout(800);
-      ok = true;
-      levelUsed = 0;
-    } catch (e: any) {
-      errMsg = e.message;
-
-      // Level 1 fallback: DOM evaluation
-      try {
-        const page = getPage()!;
-        const found = await page.evaluate(
-          ({ t, sel }: { t: string; sel: string[] }) => {
-            for (const el of Array.from(document.querySelectorAll(sel.join(",")))) {
-              const h = el as HTMLElement;
-              if (
-                h.innerText?.includes(t) ||
-                (el as HTMLInputElement).placeholder?.includes(t)
-              ) {
-                h.click();
-                return true;
-              }
-            }
-            return false;
-          },
-          {
-            t: target || "",
-            sel: ["button", "a", "input", "span", "[role='button']", "[role='link']"],
-          }
-        );
-        if (found) {
-          ok = true;
-          levelUsed = 1;
-          await page.waitForTimeout(500);
-        }
-      } catch {
-        // fall through
-      }
-    }
-
-    const after = ok ? await smartScreenshot(false) : await smartScreenshot(true);
-    const state = await pageState();
-    const errors = capturer.getErrors();
-    const warnings = capturer.getWarnings();
-    const network = capturer.getNetwork();
-    const confidence = ok ? (levelUsed === 0 ? 0.95 : 0.85) : 0;
+    // Attach captured network/log data
+    result.consoleLogs = capturer.getLogs();
+    result.networkRequests = capturer.getNetwork();
 
     res.json({
-      success: ok,
-      confidence,
-      message: ok
-        ? `Done: ${action} ${target}`
-        : `Failed: ${errMsg}`,
-      screenshotBefore: before,
-      screenshotAfter: after,
+      success: result.success,
+      confidence: result.confidence,
+      levelUsed: result.levelUsed,
+      message: result.message,
+      screenshotBefore: result.screenshotBefore,
+      screenshotAfter: result.screenshotAfter,
       consoleLogs: {
-        errors: errors.slice(0, 20),
-        warnings: warnings.slice(0, 20),
+        errors: (result.consoleLogs as any[])?.filter((l: any) => l.level === "error" || l.level === "exception").slice(0, 20) || [],
+        warnings: (result.consoleLogs as any[])?.filter((l: any) => l.level === "warning").slice(0, 20) || [],
       },
-      networkRequests: network
-        .filter((n) => n.type === "response")
+      networkRequests: (result.networkRequests as any[])
+        ?.filter((n: any) => n.type === "response")
         .slice(-30)
-        .map((n) => ({
+        .map((n: any) => ({
           method: n.method,
           url: n.url,
           status: n.status,
           timing: n.timing,
-        })),
-      pageState: state,
-      duration_ms: Date.now() - stepStart(),
+        })) || [],
+      pageState: result.pageState,
+      duration_ms: result.durationMs,
     });
   } catch (e: any) {
     res.status(500).json({ success: false, message: e.message });
   }
 });
-
-// Track step start time via a simple variable for the legacy endpoint
-let _stepStart = Date.now();
-function stepStart(): number {
-  const now = Date.now();
-  const prev = _stepStart;
-  _stepStart = now;
-  return prev;
-}
 
 app.post("/agent/screenshot", async (req, res) => {
   try {
@@ -272,5 +214,5 @@ app.get("/run/:id/status", (req, res) => {
 // ---------------------------------------------------------------------------
 const PORT = parseInt(process.env.PORT || "3100", 10);
 server.listen(PORT, () => {
-  console.log(`[AutoTest Executor] :${PORT} CDP+Midscene+RunManager`);
+  console.log(`[AutoTest Executor] :${PORT} CDP+PurePlaywright+RunManager`);
 });

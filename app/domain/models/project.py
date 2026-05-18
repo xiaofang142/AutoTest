@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -36,6 +37,6 @@ class Project(BaseModel):
     entries: list[PlatformEntry] = []
     document_refs: list[DocumentRef] = []
     config: ProjectConfig = ProjectConfig()
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     deleted_at: Optional[datetime] = None

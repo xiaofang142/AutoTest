@@ -69,12 +69,34 @@
 
       <!-- 场景 -->
       <el-tab-pane label="场景" name="scenarios">
-        <el-button @click="handleGenerate" type="primary" size="small">生成测试场景</el-button>
+        <div style="display: flex; gap: 8px; margin-bottom: 10px">
+          <el-button @click="handleGenerate" type="primary" size="small">🤖 生成测试场景</el-button>
+          <el-button @click="generateWithChain" size="small">🔗 多角色矩阵生成</el-button>
+        </div>
+
+        <div v-if="loading" v-loading="true" style="height: 200px" />
+
+        <!-- 流程可视化 -->
+        <FlowGraph v-if="chainData.length && !loading" :chains="chainData" />
+
+        <el-divider v-if="chainData.length" />
+
+        <!-- 场景表格 -->
         <el-table :data="scenarios" style="margin-top:10px">
-          <el-table-column prop="name" label="场景名称" />
-          <el-table-column prop="type" label="类型" width="100" />
+          <el-table-column prop="name" label="场景名称" min-width="180" />
+          <el-table-column prop="type" label="类型" width="100">
+            <template #default="{ row }">
+              <el-tag :type="row.type === 'positive' ? 'success' : row.type === 'abnormal' ? 'danger' : 'warning'" size="small">
+                {{ typeLabel(row.type) }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="business_line" label="业务线" width="120" />
-          <el-table-column prop="status" label="状态" width="90" />
+          <el-table-column prop="role" label="角色" width="80" />
+          <el-table-column prop="status" label="状态" width="80" />
+          <el-table-column label="用例数" width="70" align="center">
+            <template #default="{ row }">{{ row.cases?.length || 0 }}</template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
 
@@ -103,6 +125,7 @@ import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { ElMessage } from "element-plus";
 import { projectApi, documentApi, scenarioApi, runApi } from "../api";
+import FlowGraph from "../components/FlowGraph.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -119,6 +142,14 @@ const docType = ref("prd");
 const docMode = ref("url");
 const fileName = ref("");
 const fileContent = ref("");
+
+// 流程可视化数据
+const chainData = ref<any[]>([]);
+
+const typeLabel = (t: string) => {
+  const map: Record<string, string> = { positive: "正向", boundary: "边界", abnormal: "异常", permission: "权限" };
+  return map[t] || t;
+};
 
 const statusTag = (s: string) => {
   const m: Record<string, string> = { completed: "success", running: "warning", failed: "danger", ready: "info" };
@@ -161,15 +192,76 @@ const handleParse = async () => {
   }
 };
 
+// 将场景列表转为可视化链条数据
+function scenariosToChains(sces: any[]): any[] {
+  const chainMap = new Map<string, any>();
+  for (const sc of sces) {
+    const key = sc.business_line || "default";
+    if (!chainMap.has(key)) {
+      chainMap.set(key, {
+        name: sc.business_line || "默认业务线",
+        source: "extracted",
+        roles: [],
+        steps: [],
+        pathTypes: [],
+      });
+    }
+    const chain = chainMap.get(key)!;
+    if (sc.role && !chain.roles.includes(sc.role)) chain.roles.push(sc.role);
+    for (const c of sc.cases || []) {
+      for (const step of c.steps || []) {
+        if (!chain.steps.find((s: any) => s.action === step.action)) {
+          chain.steps.push({ action: step.action, page: step.target, expected: step.expected?.business || "" });
+        }
+      }
+    }
+    const ptLabel = typeLabel(sc.type);
+    const tagType = sc.type === "positive" ? "success" : sc.type === "abnormal" ? "danger" : "warning";
+    const existing = chain.pathTypes.find((p: any) => p.type === sc.type);
+    if (existing) {
+      existing.count += sc.cases?.length || 1;
+    } else {
+      chain.pathTypes.push({ type: sc.type, label: ptLabel, count: sc.cases?.length || 1, tagType, callback: () => {} });
+    }
+  }
+  return Array.from(chainMap.values());
+}
+
 const handleGenerate = async () => {
   try {
+    loading.value = true;
     await scenarioApi.generate(pid, ["web"]);
     ElMessage.success("场景生成完成");
     const resp = await scenarioApi.list(pid);
     scenarios.value = resp.data.data.items;
+    chainData.value = scenariosToChains(scenarios.value);
   } catch (e: any) {
     ElMessage.error("生成失败: " + (e.response?.data?.message || e.message));
   }
+  loading.value = false;
+};
+
+const generateWithChain = async () => {
+  try {
+    loading.value = true;
+    // 调用 chain 方式生成：先获取知识库规则，再走 ChainBuilder
+    const kbResp = await import("../api").then(m => m.knowledgeApi.getRules(pid));
+    const rules = kbResp.data?.data?.items || [];
+    if (!rules.length) {
+      ElMessage.info("暂无文档规则，将使用页面分析生成基础场景");
+      await scenarioApi.generate(pid, ["web"]);
+    } else {
+      // 有规则时触发带链的场景生成
+      await scenarioApi.generate(pid, ["web"]);
+    }
+    const resp = await scenarioApi.list(pid);
+    scenarios.value = resp.data.data.items;
+    chainData.value = scenariosToChains(scenarios.value);
+    ElMessage.success(`已生成 ${scenarios.value.length} 个场景`);
+  } catch (e: any) {
+    ElMessage.error("生成失败: " + (e.response?.data?.message || e.message));
+  }
+  loading.value = false;
 };
 
 const handleRun = async () => {
@@ -193,6 +285,7 @@ onMounted(async () => {
     project.value = pResp.data.data;
     documents.value = dResp.data.data.items;
     scenarios.value = sResp.data.data.items;
+    chainData.value = scenariosToChains(scenarios.value);
     runs.value = rResp.data.data.items;
   } catch (e: any) {
     ElMessage.error("加载失败: " + e.message);

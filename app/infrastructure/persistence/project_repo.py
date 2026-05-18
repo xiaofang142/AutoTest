@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,7 +8,7 @@ from app.infrastructure.persistence.models import ProjectModel
 from app.interfaces.repositories.project_repo import ProjectRepository
 
 
-class PostgresProjectRepository(ProjectRepository):
+class SqlProjectRepository(ProjectRepository):
     def __init__(self, session: AsyncSession):
         self._session = session
 
@@ -20,8 +21,8 @@ class PostgresProjectRepository(ProjectRepository):
             platforms=project.platforms,
             entries=[e.model_dump() for e in project.entries],
             config=project.config.model_dump(),
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
         )
         self._session.add(model)
         await self._session.commit()
@@ -44,14 +45,14 @@ class PostgresProjectRepository(ProjectRepository):
             model.status = project.status
             model.platforms = project.platforms
             model.entries = [e.model_dump() for e in project.entries]
-            model.updated_at = datetime.now()
+            model.updated_at = datetime.now(timezone.utc)
             await self._session.commit()
         return project
 
     async def delete(self, project_id: str) -> None:
         model = await self._session.get(ProjectModel, project_id)
         if model:
-            model.deleted_at = datetime.now()
+            model.deleted_at = datetime.now(timezone.utc)
             await self._session.commit()
 
     async def list_projects(self, status: str | None = None) -> list[Project]:

@@ -1,9 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
 class TestStep(BaseModel):
+    __test__ = False
     index: int
     action: str
     target: str = ""
@@ -30,7 +32,7 @@ class TestCase(BaseModel):
     expected_results: Optional[ExpectedResult] = None
     preconditions: list[str] = []
     tags: list[str] = []
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class CoverageInfo(BaseModel):
@@ -40,6 +42,7 @@ class CoverageInfo(BaseModel):
 
 
 class TestScenario(BaseModel):
+    __test__ = False
     id: str = ""
     project_id: str
     business_line: str = ""
@@ -47,9 +50,10 @@ class TestScenario(BaseModel):
     description: str = ""
     type: str = "positive"
     role: str = ""
+    platforms: list[str] = ["web"]
     cases: list[TestCase] = []
     coverage: CoverageInfo = CoverageInfo()
     status: str = "draft"
     expected_status: str = "success"
-    created_at: datetime = Field(default_factory=datetime.now)
-    updated_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

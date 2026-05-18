@@ -1,11 +1,11 @@
 """Document service with real content fetching, parsing, and rule extraction."""
-from app.domain.models.document import Document, DocumentRaw
+from app.domain.exceptions import DocumentNotFoundError, DocumentParseError, InvalidParameterError
+from app.domain.models.document import Document
 from app.domain.models.knowledge import BusinessRule, KnowledgeBase
-from app.domain.exceptions import DocumentNotFoundError, InvalidParameterError, DocumentParseError
+from app.infrastructure.parser.document_parser import DocumentParser
+from app.interfaces.ai_service import AIService
 from app.interfaces.repositories.document_repo import DocumentRepository
 from app.interfaces.repositories.knowledge_repo import KnowledgeBaseRepository
-from app.interfaces.ai_service import AIService
-from app.infrastructure.parser.document_parser import DocumentParser
 from app.lib.id_generator import generate_id
 from app.lib.logger import get_logger
 
@@ -28,7 +28,7 @@ class DocumentService:
         doc = Document(id=generate_id("document"), project_id=project_id, url=url,
                        type=doc_type, description=description)
         created = await self._repo.create(doc)
-        logger.info(f"Document added: {created.id}")
+        logger.info("Document added: %s", created.id)
         return created
 
     async def get_document(self, document_id: str) -> Document:
@@ -83,14 +83,14 @@ class DocumentService:
             doc.status = "completed"
             doc.rule_count = rule_count
             await self._repo.update(doc)
-            logger.info(f"Parse complete: doc={document_id}, {rule_count} rules extracted")
+            logger.info("Parse complete: doc=%s, %s rules extracted", document_id, rule_count)
             return doc
 
         except Exception as e:
             doc.status = "failed"
             doc.error_message = str(e)
             await self._repo.update(doc)
-            logger.error(f"Parse failed: {document_id}: {e}")
+            logger.error("Parse failed: %s: %s", document_id, e)
             raise DocumentParseError(document_id, str(e))
 
     async def _fetch_content(self, url: str) -> str:
@@ -101,13 +101,13 @@ class DocumentService:
                 resp = await httpx.AsyncClient(timeout=15, follow_redirects=True).get(url)
                 if resp.status_code == 200:
                     text = resp.text
-                    logger.info(f"Fetched {len(text)} chars from {url}")
+                    logger.info("Fetched %s chars from %s", len(text), url)
                     return text[:50000]
                 else:
-                    logger.warning(f"Fetch failed: {url} -> {resp.status_code}")
+                    logger.warning("Fetch failed: %s -> %s", url, resp.status_code)
                     return ""
             except Exception as e:
-                logger.warning(f"Fetch error: {url}: {e}")
+                logger.warning("Fetch error: %s: %s", url, e)
                 return ""
         # Local file path or other
         return f"# Document from {url}\n\nThis document contains business rules for testing.\n"

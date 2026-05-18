@@ -1,7 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.scenario import TestScenario, TestCase, TestStep
+from app.domain.models.scenario import TestCase, TestScenario, TestStep
 from app.infrastructure.persistence.models import ScenarioModel, TestCaseModel
 from app.interfaces.repositories.scenario_repo import ScenarioRepository
 from app.lib.logger import get_logger
@@ -9,7 +9,7 @@ from app.lib.logger import get_logger
 logger = get_logger(__name__)
 
 
-class PostgresScenarioRepository(ScenarioRepository):
+class SqlScenarioRepository(ScenarioRepository):
     def __init__(self, session: AsyncSession):
         self._session = session
 

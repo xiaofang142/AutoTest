@@ -1,7 +1,9 @@
 """GLM-4V OCR service - gracefully degrades to empty result when no API key."""
-import json, re
-from app.interfaces.ocr_service import OCRService
+import json
+import re
+
 from app.config import settings
+from app.interfaces.ocr_service import OCRService
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,7 +41,7 @@ class GLMVOCRService(OCRService):
             match = re.search(r'\{.*\}', content, re.DOTALL)
             return json.loads(match.group()) if match else {"text": content, "elements": []}
         except Exception as e:
-            logger.error(f"GLM-4V OCR failed: {e}")
+            logger.error("GLM-4V OCR failed: %s", e)
             return {"text": "", "elements": [], "error": str(e)}
 
     async def recognize_components(self, image_base64: str) -> list[dict]:

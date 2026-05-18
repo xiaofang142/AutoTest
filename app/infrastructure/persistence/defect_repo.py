@@ -1,13 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.defect import Defect, EvidenceChain
+from app.domain.models.defect import Defect
 from app.infrastructure.persistence.models import DefectModel
 from app.interfaces.repositories.defect_repo import DefectRepository
 
 
-class PostgresDefectRepository(DefectRepository):
+class SqlDefectRepository(DefectRepository):
     def __init__(self, session: AsyncSession):
         self._session = session
 
@@ -21,7 +22,7 @@ class PostgresDefectRepository(DefectRepository):
             fix_suggestion=defect.fix_suggestion.model_dump() if defect.fix_suggestion else None,
             cross_dimension_analysis=defect.cross_dimension_analysis,
             is_false_positive=defect.is_false_positive,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
         self._session.add(model)
         await self._session.commit()

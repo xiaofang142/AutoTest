@@ -1,4 +1,5 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -13,7 +14,7 @@ async def run_progress_ws(websocket: WebSocket, run_id: str):
     if run_id not in active_connections:
         active_connections[run_id] = []
     active_connections[run_id].append(websocket)
-    logger.info(f"WebSocket connected: run_id={run_id}")
+    logger.info("WebSocket connected: run_id=%s", run_id)
     try:
         while True:
             await websocket.receive_text()

@@ -1,5 +1,7 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
+
 from app.domain.exceptions import InvalidParameterError, ProjectNotFoundError
 from app.services.project_service import ProjectService
 

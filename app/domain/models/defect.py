@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -43,4 +44,4 @@ class Defect(BaseModel):
     evidence_chains: list[EvidenceChain] = []
     synthesis: Optional[SynthesisConclusion] = None
     is_false_positive: bool = False
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

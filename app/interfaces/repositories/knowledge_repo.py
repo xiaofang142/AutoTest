@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from app.domain.models.knowledge import KnowledgeBase, BusinessRule, Conflict
+
+from app.domain.models.knowledge import BusinessRule, Conflict, KnowledgeBase
 
 
 class KnowledgeBaseRepository(ABC):

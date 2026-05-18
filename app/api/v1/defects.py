@@ -1,6 +1,5 @@
 from fastapi import APIRouter, HTTPException
 
-from app.domain.exceptions import DefectNotFoundError
 from app.services.report_service import ReportService
 
 router = APIRouter(tags=["defects"])
@@ -50,5 +49,5 @@ async def get_evidence(defect_id: str, format: str = "full"):
 
 
 def _get_defect_repo():
-    from app.infrastructure.persistence.defect_repo import PostgresDefectRepository
-    return PostgresDefectRepository()
+    from app.dependencies import get_analyzer
+    return get_analyzer()._defect_repo

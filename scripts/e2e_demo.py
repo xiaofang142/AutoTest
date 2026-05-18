@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """AutoTest E2E: create project → parse doc → generate → execute → report"""
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import argparse
 import asyncio
-from httpx import AsyncClient, ASGITransport
-from app.main import app
+
+from httpx import ASGITransport, AsyncClient
+
 from app.dependencies import init_services
 from app.domain.models.run import RunRecord
 from app.domain.models.scenario import TestStep
 from app.lib.id_generator import generate_id
+from app.main import app
 
 PASS = 0; FAIL = 0
 def ok(label, cond, detail=""):
@@ -29,7 +33,7 @@ async def main():
     print("\n" + "="*70 + "\n  AutoTest E2E: 需求→设计→编码→测试→修复\n" + "="*70)
     init_services()
     transport = ASGITransport(app=app)
-    from app.dependencies import _MemRunRepo, _MemDefectRepo, _MemScenarioRepo
+    from app.dependencies import _MemDefectRepo, _MemRunRepo, _MemScenarioRepo
     run_repo = _MemRunRepo()
     defect_repo = _MemDefectRepo()
     scenario_repo = _MemScenarioRepo()
@@ -101,7 +105,7 @@ async def main():
         print("\n[6/7] 执行报告 + 缺陷")
         for st in report["steps"]:
             console_info = f" ⚠️{st['console_errors']}控制台错误" if st['console_errors'] else ""
-            defect_info = f" 🐛缺陷" if st['defect'] else ""
+            defect_info = " 🐛缺陷" if st['defect'] else ""
             print(f"  步骤{st['step_index']}: {st['status']} — {st['action'][:30]}{console_info}{defect_info}")
 
         if report["defects"]:
@@ -122,9 +126,9 @@ async def main():
     print(f"\n{'='*70}")
     print(f"  结果: {PASS}/{total} 通过, {FAIL}/{total} 失败")
     print(f"{'='*70}")
-    print(f"\n  模式: 🌐 Real Midscene 浏览器执行:")
-    print(f"    cd executor/web && npx playwright install chromium && npx tsx src/index.ts")
-    print(f"    .env: EXECUTOR_MODE=real")
+    print("\n  模式: 🌐 Real Midscene 浏览器执行:")
+    print("    cd executor/web && npx playwright install chromium && npx tsx src/index.ts")
+    print("    .env: EXECUTOR_MODE=real")
     return FAIL == 0
 
 if __name__ == "__main__":

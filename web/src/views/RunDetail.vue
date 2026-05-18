@@ -39,18 +39,18 @@
             </div>
 
             <!-- 控制台日志 -->
-            <div v-if="s.console_errors" style="margin-top:8px">
-              <el-tag type="warning" size="small">⚠️ {{ s.console_errors }} 控制台异常</el-tag>
+            <div v-if="s.consoleLogs?.length" style="margin-top:8px">
+              <el-tag type="warning" size="small">⚠️ {{ s.consoleLogs.length }} 控制台异常</el-tag>
             </div>
 
             <!-- API 请求 -->
-            <div v-if="s.api_calls" style="margin-top:4px">
-              <el-tag type="info" size="small">📡 {{ s.api_calls }} 网络请求</el-tag>
+            <div v-if="s.networkRequests?.length" style="margin-top:4px">
+              <el-tag type="info" size="small">📡 {{ s.networkRequests.length }} 网络请求</el-tag>
             </div>
 
             <!-- 目标 URL -->
-            <div v-if="s.target" style="margin-top:4px;font-size:12px;color:#999">
-              URL: {{ s.target.slice(0,60) }}
+            <div v-if="s.pageState?.url" style="margin-top:4px;font-size:12px;color:#999">
+              URL: {{ s.pageState.url.slice(0,60) }}
             </div>
           </div>
         </el-timeline-item>

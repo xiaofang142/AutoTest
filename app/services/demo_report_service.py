@@ -1,8 +1,9 @@
 """Aggregate all demo execution data into a structured JSON report."""
 from datetime import datetime
-from app.domain.models.run import StepExecutionRecord
+
 from app.domain.models.defect import Defect
 from app.domain.models.discovery import PageDiscoveryResult
+from app.domain.models.run import StepExecutionRecord
 from app.services.contrast_service import ContrastReport
 
 

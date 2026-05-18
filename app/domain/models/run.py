@@ -1,5 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -42,6 +43,8 @@ class VerificationResult(BaseModel):
     issues: list[dict] = []
     confidence: float = 1.0
     detail: str = ""
+    ocr_text: str = ""
+    ocr_elements: list[dict] = []
 
 
 class Verifications(BaseModel):
@@ -67,8 +70,9 @@ class StepExecutionRecord(BaseModel):
     verifications: Verifications = Verifications()
     cross_dimension_report: dict = {}
     error: Optional[str] = None
+    llm_analysis: Optional[dict] = None
     retry_count: int = 0
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class RunSummary(BaseModel):
@@ -90,6 +94,7 @@ class RunSummary(BaseModel):
 class RunRecord(BaseModel):
     id: str = ""
     project_id: str
+    task_id: str = ""  # link back to parent TestTask if created via task pipeline
     name: str = ""
     status: str = "queued"
     platforms: list[str] = ["web"]
@@ -101,4 +106,4 @@ class RunRecord(BaseModel):
     uncertain_count: int = 0
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

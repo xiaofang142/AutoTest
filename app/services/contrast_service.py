@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
-from typing import Optional
 import re
+from dataclasses import dataclass, field
+
+from app.domain.models.discovery import PageDiscoveryResult
 from app.domain.models.knowledge import BusinessRule
-from app.domain.models.discovery import PageDiscoveryResult, DiscoveredElement
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)

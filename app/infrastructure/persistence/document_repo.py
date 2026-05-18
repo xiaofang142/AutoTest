@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,7 +8,7 @@ from app.infrastructure.persistence.models import DocumentModel
 from app.interfaces.repositories.document_repo import DocumentRepository
 
 
-class PostgresDocumentRepository(DocumentRepository):
+class SqlDocumentRepository(DocumentRepository):
     def __init__(self, session: AsyncSession):
         self._session = session
 
@@ -20,7 +21,7 @@ class PostgresDocumentRepository(DocumentRepository):
             description=document.description,
             version=document.version,
             status=document.status,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
         self._session.add(model)
         await self._session.commit()

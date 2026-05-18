@@ -1,10 +1,20 @@
-from dataclasses import dataclass, field
-import httpx
+from dataclasses import dataclass
 from typing import Optional
-from app.domain.models.run import StepExecutionRecord, ConsoleSnapshot, ConsoleLogEntry, NetworkSnapshot, NetworkEntry, PageState, Verifications, VerificationResult
+
+import httpx
+
+from app.config import settings
+from app.domain.models.run import (
+    ConsoleLogEntry,
+    ConsoleSnapshot,
+    NetworkSnapshot,
+    PageState,
+    StepExecutionRecord,
+    VerificationResult,
+    Verifications,
+)
 from app.domain.models.scenario import TestStep
 from app.interfaces.executor_client import ExecutorClient
-from app.config import settings
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -68,7 +78,7 @@ class WebExecutorClient(ExecutorClient):
         await self._client.post(f"{self.base_url}/run/{run_id}/cancel", timeout=10)
 
     async def execute_step(self, step: TestStep, context: Optional[dict] = None) -> StepExecutionRecord:
-        logger.info(f"Executor: {step.action} {step.target}")
+        logger.info("Executor: %s %s", step.action, step.target)
         try:
             resp = await self._client.post(f"{self.base_url}/agent/execute", json={
                 "action": step.action, "target": step.target, "value": step.value,
@@ -76,23 +86,29 @@ class WebExecutorClient(ExecutorClient):
             resp.raise_for_status()
             result = resp.json()
         except Exception as e:
-            return StepExecutionRecord(id=f"err_{step.index}", run_id=(context or {}).get("run_id", ""),
+            return StepExecutionRecord(id=f"err_{(context or {}).get('run_id','')}_{step.index}", run_id=(context or {}).get("run_id", ""),
                 case_id=(context or {}).get("case_id", ""), step_index=step.index,
                 action=step.action, status="failed", error=str(e))
 
         console = result.get("consoleLogs") or {}
         ps = result.get("pageState") or {}
+        target_desc = f" {step.target}" if step.target else ""
         return StepExecutionRecord(
-            id=f"step_{step.index}", run_id=(context or {}).get("run_id", ""),
+            id=f"step_{(context or {}).get('run_id','')}_{step.index}", run_id=(context or {}).get("run_id", ""),
             case_id=(context or {}).get("case_id", ""), step_index=step.index,
-            action=step.action, platform="web",
+            action=step.action + target_desc, platform="web",
             status="passed" if result.get("success") else "failed",
+            duration_ms=result.get("duration_ms", 0),
             screenshots={"before": result.get("screenshotBefore", ""),
                          "after": result.get("screenshotAfter", "")},
             console_snapshot=ConsoleSnapshot(
                 errors=[ConsoleLogEntry(level="error", message=e.get("message","")) for e in console.get("errors",[])],
                 warnings=[ConsoleLogEntry(level="warning", message=e.get("message","")) for e in console.get("warnings",[])]),
-            network_snapshot=NetworkSnapshot(requests=[], failed=[]),
+            network_snapshot=NetworkSnapshot(
+                requests=[NetworkEntry(method=r.get("method","GET"), url=r.get("url",""),
+                                       status=r.get("status",0)) for r in result.get("networkRequests",[])],
+                failed=[NetworkEntry(method=r.get("method","GET"), url=r.get("url",""),
+                                     status=r.get("status",0)) for r in result.get("networkRequests",[]) if isinstance(r.get("status"),int) and r["status"] >= 400]),
             page_state=PageState(current_url=ps.get("url",""),
                 visible_text_elements=ps.get("visibleTexts",[]),
                 active_alerts=ps.get("alerts",[])),

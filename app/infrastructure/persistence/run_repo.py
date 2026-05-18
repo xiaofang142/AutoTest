@@ -1,13 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timezone
+
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.domain.models.run import RunRecord, StepExecutionRecord, RunSummary
+from app.domain.models.run import RunRecord, RunSummary, StepExecutionRecord
 from app.infrastructure.persistence.models import RunModel, StepRecordModel
 from app.interfaces.repositories.run_repo import RunRepository
 
 
-class PostgresRunRepository(RunRepository):
+class SqlRunRepository(RunRepository):
     def __init__(self, session: AsyncSession):
         self._session = session
 
@@ -16,7 +17,7 @@ class PostgresRunRepository(RunRepository):
             id=run.id, project_id=run.project_id, name=run.name,
             status=run.status, platforms=run.platforms,
             total_cases=run.total_cases,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
         self._session.add(model)
         await self._session.commit()
@@ -55,7 +56,7 @@ class PostgresRunRepository(RunRepository):
         await self._session.execute(
             update(RunModel).where(RunModel.id == run_id).values(
                 status=status,
-                completed_at=datetime.now() if status in ("completed", "cancelled", "failed") else None,
+                completed_at=datetime.now(timezone.utc) if status in ("completed", "cancelled", "failed") else None,
             )
         )
         await self._session.commit()
@@ -78,7 +79,7 @@ class PostgresRunRepository(RunRepository):
             page_state=step.page_state.model_dump() if hasattr(step.page_state, "model_dump") else {},
             verifications=step.verifications.model_dump() if hasattr(step.verifications, "model_dump") else {},
             error=step.error,
-            created_at=datetime.now(),
+            created_at=datetime.now(timezone.utc),
         )
         self._session.add(model)
         await self._session.commit()

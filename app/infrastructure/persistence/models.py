@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Column, String, Text, Integer, Float, Boolean, DateTime, JSON, ForeignKey
+
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -161,3 +162,41 @@ class DefectModel(Base):
     cross_dimension_analysis: Mapped[dict] = mapped_column(JSON, default=dict)
     is_false_positive: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class EvidenceChainModel(Base):
+    __tablename__ = "evidence_chains"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    defect_id: Mapped[str] = mapped_column(String(32), ForeignKey("defects.id"), nullable=False)
+    chain_index: Mapped[int] = mapped_column(Integer, default=0)
+    root_trigger: Mapped[dict] = mapped_column(JSON, default=dict)
+    propagation: Mapped[dict] = mapped_column(JSON, default=list)
+    chain_type: Mapped[str] = mapped_column(String(64), default="")
+    chain_summary: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class AsyncTaskModel(Base):
+    __tablename__ = "async_tasks"
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(32), ForeignKey("projects.id"), nullable=True)
+    type: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    progress: Mapped[float] = mapped_column(Float, default=0.0)
+    input_params: Mapped[dict] = mapped_column(JSON, nullable=True)
+    result_summary: Mapped[dict] = mapped_column(JSON, nullable=True)
+    error_message: Mapped[str] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SystemConfigModel(Base):
+    __tablename__ = "system_configs"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -1,9 +1,11 @@
 # AutoTest — API 接口规范 (API Specification)
 
-> 版本: 1.0 | 最后更新: 2026-05-14 | 状态: 初始草稿
-> 基于 SDD (Specification-Driven Development) 方法
-> 关联文档: 需求文档 `docs/基于Midscene.js...md` | 架构设计 `docs/软件架构设计文档_ADD.md` | 
->          详细设计 `docs/详细设计说明书.md` | 术语表 §10 需求文档 | 数据库设计 `docs/数据库设计.md`
+> 版本: 2.0
+> 日期: 2026-05-15
+> 状态: 生效 (代码已落地)
+> 本文定位: 定义 AutoTest 的 REST API、MCP 接口、WebSocket 推送与错误码规范
+> 关联文档: [REQUIREMENTS.md](./REQUIREMENTS.md) | [ARCHITECTURE.md](./ARCHITECTURE.md) |
+>          [自动测试任务模型设计.md](./自动测试任务模型设计.md) | [自动缺陷归因与AI交付设计.md](./自动缺陷归因与AI交付设计.md)
 
 ---
 
@@ -41,7 +43,7 @@
 | 数据格式 | JSON (Content-Type: `application/json`) |
 | 字符编码 | UTF-8 |
 | 时间格式 | ISO 8601 (`2026-05-14T14:30:00Z`) |
-| ID 格式 | `proj_xxx` / `doc_xxx` / `run_xxx` / `def_xxx` (类别前缀 + 12 位随机字符串) |
+| ID 格式 | `task_xxx` / `proj_xxx` / `doc_xxx` / `run_xxx` / `def_xxx` (类别前缀 + 12 位随机字符串) |
 
 ### 1.2 通用响应格式
 
@@ -134,6 +136,55 @@ Authorization: Bearer <api_key_or_jwt>
 | 50002 | 执行器通信失败 |
 | 50003 | OCR 服务不可用 |
 | 50400 | 上游服务超时 |
+
+### 1.8 VNext 顶层对象与推荐主线
+
+本规范兼容现有项目驱动接口，但从产品主线看，推荐的顶层对象已经调整为以下接口资源视角:
+
+- `TestTask`
+- `EnvironmentCheck`
+- `UnderstandingResult`
+- `TestBlueprint`
+- `ExecutionRun`
+- `Defect`
+- `RepairContext`
+- `DeliveryPackage`
+
+这些对象的业务语义由 [自动测试任务模型设计.md](./自动测试任务模型设计.md) 和 [自动缺陷归因与AI交付设计.md](./自动缺陷归因与AI交付设计.md) 定义。
+
+本规范只负责说明它们在接口层如何暴露，而不是重复定义完整业务模型。
+
+### 1.9 任务状态
+
+推荐统一使用以下任务状态:
+
+- `draft`
+- `prechecking`
+- `understanding`
+- `planning`
+- `running`
+- `analyzing`
+- `completed`
+- `completed_with_defects`
+- `blocked`
+- `cancelled`
+- `error`
+
+### 1.10 推荐的任务驱动接口
+
+建议新增并逐步作为主线使用:
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| `POST` | `/api/v1/tasks` | 创建自动测试任务 |
+| `GET` | `/api/v1/tasks` | 获取任务列表 |
+| `GET` | `/api/v1/tasks/{task_id}` | 获取任务详情 |
+| `POST` | `/api/v1/tasks/{task_id}/start` | 启动任务 |
+| `POST` | `/api/v1/tasks/{task_id}/cancel` | 取消任务 |
+| `GET` | `/api/v1/tasks/{task_id}/timeline` | 获取任务阶段时间线 |
+| `GET` | `/api/v1/tasks/{task_id}/delivery` | 获取任务交付包 |
+| `GET` | `/api/v1/tasks/{task_id}/defects` | 获取任务缺陷列表 |
+| `GET` | `/api/v1/tasks/{task_id}/repair-context` | 获取任务级修复上下文 |
 
 ---
 
@@ -951,7 +1002,7 @@ GET /api/v1/defects/{defect_id}/evidence
 |------|------|--------|------|
 | format | str | full | full（含截图 base64） / compact（不含截图，适合 AI 处理） |
 
-**响应:** 完整的证据链数据（`EvidenceChain[]`），数据结构参考详细设计说明书 §14.2 领域事件目录中的 `DefectFound` 事件 Payload。
+**响应:** 完整的证据链数据（`EvidenceChain[]`），数据结构参考 [详细设计说明书.md](./详细设计说明书.md) 中与缺陷事件、证据链相关的定义。
 
 ### 7.4 缺陷列表
 

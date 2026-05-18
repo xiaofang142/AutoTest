@@ -13,10 +13,19 @@
         style="border: none"
       >
         <el-menu-item index="/">
-          <span>仪表盘</span>
+          <span>🏠 新建自动测试</span>
+        </el-menu-item>
+        <el-menu-item index="/tasks">
+          <span>📋 测试任务</span>
+        </el-menu-item>
+        <el-menu-item index="/knowledge">
+          <span>📖 知识/文档</span>
         </el-menu-item>
         <el-menu-item index="/projects">
-          <span>项目管理</span>
+          <span>📁 项目管理</span>
+        </el-menu-item>
+        <el-menu-item index="/settings">
+          <span>⚙️ 设置</span>
         </el-menu-item>
       </el-menu>
     </el-aside>

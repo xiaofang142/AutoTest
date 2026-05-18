@@ -1,5 +1,4 @@
 from app.interfaces.file_service import FileService
-from app.config import settings
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -13,7 +12,7 @@ class LocalFileService(FileService):
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
         async with aiofiles.open(full_path, "wb") as f:
             await f.write(file_data)
-        logger.info(f"File saved: {full_path}")
+        logger.info("File saved: %s", full_path)
         return full_path
 
     async def download(self, path: str) -> bytes:
@@ -24,4 +23,4 @@ class LocalFileService(FileService):
         import os
         if os.path.exists(path):
             os.remove(path)
-            logger.info(f"File deleted: {path}")
+            logger.info("File deleted: %s", path)

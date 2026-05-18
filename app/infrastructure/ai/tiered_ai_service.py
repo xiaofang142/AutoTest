@@ -1,10 +1,11 @@
 """Tiered AI service with local OCR, cheap LLM for simple tasks, expensive LLM for complex analysis.
 Significantly reduces token consumption while maintaining accuracy."""
-import hashlib, json, time
-from typing import Optional, Callable, Awaitable
+import hashlib
+import time
+from typing import Optional
+
 from app.interfaces.ai_service import AIService
 from app.interfaces.ocr_service import OCRService
-from app.config import settings
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -22,7 +23,7 @@ class SemanticCache:
     def get(self, prompt: str) -> Optional[str]:
         h = self._hash(prompt)
         if h in self._store:
-            logger.debug(f"Semantic cache EXACT hit: {h[:8]}")
+            logger.debug("Semantic cache EXACT hit: %s", h[:8])
             return self._store[h][0]
         return None
 
@@ -94,7 +95,7 @@ class TieredAIService(AIService):
     async def extract_rules(self, content: str, strategy: str = "general") -> dict:
         complexity = self._classify_complexity(f"extract {strategy}")
         service = self._get_lite() if complexity in ("low", "medium") else self._get_full()
-        logger.info(f"TieredAI: extract_rules strategy={strategy} tier={complexity}")
+        logger.info("TieredAI: extract_rules strategy=%s tier=%s", strategy, complexity)
         return await service.extract_rules(content, strategy)
 
     async def analyze_root_cause(self, evidence: dict) -> dict:
@@ -122,7 +123,7 @@ class TieredAIService(AIService):
             result = await self._ocr.recognize_text(image_base64)
             text = result.get("text", "")
             if text.strip():
-                logger.info(f"Local OCR: {len(text)} chars extracted, 0 tokens spent")
+                logger.info("Local OCR: %s chars extracted, 0 tokens spent", len(text))
                 return text
         logger.info("Local OCR unavailable, skipping text extraction")
         return ""

@@ -2,6 +2,7 @@
 import asyncio
 import json
 from typing import Callable, Optional
+
 from app.lib.logger import get_logger
 
 logger = get_logger(__name__)
@@ -35,7 +36,7 @@ class ExecutorWSClient:
         import websockets
         self._ws = await websockets.connect(self._url)
         self._running = True
-        logger.info(f"WS connected: {self._url}")
+        logger.info("WS connected: %s", self._url)
 
     async def disconnect(self) -> None:
         """Close the WebSocket connection."""
@@ -67,11 +68,11 @@ class ExecutorWSClient:
                         for h in handlers:
                             h(payload)
                     except json.JSONDecodeError:
-                        logger.warning(f"WS received non-JSON message: {raw[:100]}")
+                        logger.warning("WS received non-JSON message: %s", raw[:100])
             except Exception as e:
                 if not self._running:
                     break
                 delay = self._reconnect_delays[min(attempt, len(self._reconnect_delays) - 1)]
-                logger.warning(f"WS disconnected: {e}. Reconnecting in {delay}s...")
+                logger.warning("WS disconnected: %s. Reconnecting in %ss...", e, delay)
                 await asyncio.sleep(delay)
                 attempt += 1
